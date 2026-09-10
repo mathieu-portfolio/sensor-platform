@@ -1,3 +1,8 @@
+# Local CMake builds and generated files
+/build/
+/build-*/
+/cmake-build-*/
+/out/
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
@@ -10,3 +15,15 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 CMakeUserPresets.json
+
+# Machine-local editor and OS files
+/.vs/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+
+# Local credentials; keep example configuration trackable
+.env
+.env.*
+!.env.example
