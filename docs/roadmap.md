@@ -1,6 +1,6 @@
 # Roadmap
 
-Each stage produces a runnable or reviewable result with explicit exit criteria. Later stages are direction, not commitments to particular products or a service inventory. Keep the world authoritative and centralized throughout. Changes to sensor-sandbox are outside this initialization and must be scoped separately.
+Each stage produces a runnable or reviewable result with explicit exit criteria. Later stages are direction, not commitments to particular products or a service inventory. Keep the world authoritative and centralized throughout. The first implementation task separately authorized focused sensor-sandbox changes.
 
 ## 0. Foundation (this initialization)
 
@@ -9,6 +9,8 @@ Scope: inspect sensor-sandbox, document actual behavior and coupling, evaluate r
 Exit: README, architecture assessment, and this roadmap agree on implemented versus proposed behavior; local links and ignore rules validate; no source copied, dependencies introduced, or sandbox files changed.
 
 ## 1. Prove a small headless world-to-sensor boundary
+
+Implementation update: the first small slice was implemented directly in sensor-sandbox instead of creating the originally proposed platform-owned probe below. It provides a raylib-free simulation/test build and an explicit single-sensor scan API with timestamped results and deterministic timing tests. Existing world motion, scenarios, and tracking remain canonical there. No shared package was extracted. The original broader criteria below remain a guide, not a claim that truth metadata, presentation headers, or the whole domain model have already been separated. The next small step is separating evaluation-only truth links from measured observations while retaining an explicit compatibility path for the existing tracker, before expanding to independent radars.
 
 Scope: a minimal C++20/CMake boundary probe inside radar-platform with one scripted straight-moving entity, one configured radar, and explicit simulation steps. Represent world state with native values; update the world once, then pass read-only state to a sensor operation. Return an explicit scan result that distinguishes not-due from completed-with-zero-detections. Keep sensor runtime state separate from world state. This is a small local implementation, not shared-core extraction or a full sandbox port.
 
@@ -111,4 +113,4 @@ Exit criteria:
 - At least one measured bottleneck has a before/after comparison with unchanged correctness criteria.
 - Publish reproducible commands and findings, including limitations and tradeoffs.
 
-The next implementation task is milestone 1 only. No future component needs a placeholder directory now.
+No future component needs a placeholder directory now. Continue with the remaining small boundary work before starting milestone 2.

@@ -2,7 +2,21 @@
 
 ## Status and evidence
 
-This document separates observations from proposals. No target architecture is implemented in radar-platform yet.
+This document separates observations from proposals. radar-platform itself remains documentation-only; the first boundary implementation now lives in sensor-sandbox as described below. The original inspection sections describe the baseline revision, not the updated build/API.
+
+## First boundary implementation
+
+Implemented in sensor-sandbox commit `56ac040f32b9aa741c9f02266eb9b0ef06c9ab91` (`Establish headless sensor timing boundary`). Validation on Windows/MSVC 19.44: 49 headless tests passed with raylib discovery disabled; the interactive executable built, and all 54 app-enabled tests passed, including five audio tests. Validation used the existing pinned GoogleTest v1.15.2 source after the installed GoogleTest binaries crashed during discovery. The GUI was not manually exercised.
+
+The small milestone refines the existing sandbox rather than creating a second platform-owned probe. `sensor_simulation` no longer links presentation code. With `SENSOR_BUILD_APP=OFF`, neither raylib discovery nor UI/audio/rendering targets are required. Domain tests link only simulation and GoogleTest; audio tests use a separate target when the app is enabled. This is an internal target boundary, not an extracted or published package.
+
+`SensorSystem::scan` now accepts one `Sensor`, a `std::span<const Entity>`, and elapsed simulation seconds. Its optional result distinguishes not-due from a completed scan containing zero or more detections. Each completed scan carries sensor ID, a one-based sequence reset per run, and the supplied acquisition time. Callers own world evolution and sensor pose; scanning does not advance or mutate the world. Positions retain sandbox world units, time is seconds, and angles are radians.
+
+Time must be finite, nonnegative, and nondecreasing until reset. The first call is due; later deadlines retain the existing 0.1 ms float tolerance. A late call observes the current world once and schedules the next scan from that time; there is no catch-up against fabricated historical positions. Changing the refresh rate takes effect after the next due scan. Two small corrections accompany the boundary: rates below 1 Hz respect their full interval, and not-due calls no longer increment the empty-scan metric.
+
+The interactive application still supplies frame deltas to `SensorSimulation`, which advances its own elapsed time before invoking the sensor. No new render clock, accumulator, or physics policy is introduced. Headless callers can provide a fixed simulation schedule directly. Identical inputs and schedules are reproducible in the same numeric environment; different late-call schedules are not promised to be equivalent. Tests cover world observation, deadlines, polling, late calls, invalid time, reset with noise/drop/false returns, and pause/resume integration.
+
+The canonical code stays in sensor-sandbox for now. Remaining coupling includes the rendering-owned frame header, mixed tuning, scenario state, and truth-assisted tracking. `Detection::sourceEntityId` is retained for compatibility, so separating evaluation truth from observations is still unfinished work. The smaller scan API does not constitute multi-radar support or a general reusable package. Revisit extraction only when a second consumer needs it.
 
 The sibling sensor-sandbox was inspected on 2026-09-10 at commit `e1fd8f4a2ff4990b4a3a232190bce3a8a7f1ba3e` (`Updated readme and docs`), with a clean Git working tree. Inspection covered the tracked source/header files, all tests, CMake configuration and scripts, documentation, content descriptors, and asset declarations. Generated build trees and dependency internals are not project architecture. The source was not modified or rebuilt during this documentation initialization. Existing test behavior below is based on reading tests, not a fresh execution result.
 
