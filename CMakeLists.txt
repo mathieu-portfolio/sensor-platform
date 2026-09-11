@@ -45,4 +45,8 @@ if(BUILD_TESTING)
         COMMAND "${CMAKE_COMMAND}" "-DPLATFORM_EXE=$<TARGET_FILE:sensor_platform>"
             "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_output.cmake")
+    set_tests_properties(platform_multi_sensor_runner platform_events_and_replay
+        PROPERTIES LABELS "platform;unit")
+    set_tests_properties(platform_headless_measurements
+        PROPERTIES LABELS "platform;integration")
 endif()
