@@ -83,6 +83,15 @@ query correctness, duplicate/conflict behavior and malformed/corrupt data.
 Next: larger multi-run fixtures and historical data-quality/retention validation
 before continuous Parquet batching or additional services.
 
+## Controlled experiments
+
+The current platform also owns [controlled experiments](experiments.md): Python
+resolves JSON configurations into deterministic C++ simulation plans and launches
+separate producer/consumer processes. Wall-clock metrics are sidecars, not domain
+event fields. Sensor outage gating lives in MultiSensorRunner; core scheduling
+and event contracts remain unchanged. DuckDB compares JSON experiment summaries,
+while normal received recordings still feed the Parquet historical pipeline.
+
 ## First boundary implementation
 
 Implemented in sensor-sandbox commit `56ac040f32b9aa741c9f02266eb9b0ef06c9ab91` (`Establish headless sensor timing boundary`). Validation on Windows/MSVC 19.44: 49 headless tests passed with raylib discovery disabled; the interactive executable built, and all 54 app-enabled tests passed, including five audio tests. Validation used the existing pinned GoogleTest v1.15.2 source after the installed GoogleTest binaries crashed during discovery. The GUI was not manually exercised.

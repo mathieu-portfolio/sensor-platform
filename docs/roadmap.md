@@ -116,15 +116,19 @@ Exit criteria:
 - Coordinate frames, acquisition-time alignment, uncertainty interpretation, and duplicate observation handling are explicit.
 - Results include cases where fusion worsens performance; no claim of calibrated covariance or realistic radar fidelity is made without a supporting model.
 
-## 9. Controlled failure/load experiments and benchmarking
+## 9. Controlled failure/load experiments and benchmarking (first slice implemented)
 
-Scope: add repeatable experiments for sensor outages, delay, duplicates, consumer failure, and increasing entity/radar/event counts. Benchmark bottlenecks before optimizing or adding infrastructure.
+Implemented: JSON-configured local/Kafka baseline, increased sensor count/cadence,
+consumer processing pause, delayed consumer and bounded sensor outage. Timestamp
+sidecars provide throughput, latency percentiles, backlog and catch-up; reference
+stream/replay checks report integrity failures. DuckDB compares machine-readable
+summaries. See [Experiments and performance](experiments.md) for actual results.
 
-Exit criteria:
+Remaining work:
 
-- Each experiment records seed, fixture, software versions, hardware, configuration, workload, and fault schedule.
-- Report throughput, latency percentiles, resource use, loss/duplication, and recovery against a stated correctness baseline.
-- At least one measured bottleneck has a before/after comparison with unchanged correctness criteria.
-- Publish reproducible commands and findings, including limitations and tradeoffs.
+- Isolate synchronous consumer commit/output costs in Release builds and profile resource use.
+- Compare bounded commit batching with the current implementation under restart/crash tests.
+- Extend controlled process-failure experiments beyond the existing Kafka restart smoke test.
+- Keep before/after comparisons tied to unchanged integrity criteria and explicit local environments.
 
-No future component needs a placeholder directory now. Continue with historical data-quality/retention validation and separate consumer checkpoint hardening; retain the shared core in sensor-sandbox.
+No future component needs a placeholder directory now. Continue with measured consumer batching/checkpoint hardening; retain the shared core in sensor-sandbox.

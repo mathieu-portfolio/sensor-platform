@@ -56,6 +56,11 @@ std::vector<StreamEvent> RunSession::advanceTo(float timeSeconds) {
     return events;
 }
 
+void RunSession::setSensorEnabled(SensorId id, bool enabled) {
+    requireActive();
+    runner_.setSensorEnabled(id, enabled);
+}
+
 StreamEvent RunSession::resetSensor(SensorId id) {
     requireActive();
     runner_.resetSensor(id);

@@ -1,0 +1,1 @@
+{"name":"outage", "run_id":104, "duration_seconds":2, "sensor_count":3, "scan_hz":[4,8,16], "seed":42, "outage":{"sensor_id":2,"start":0.5,"end":1.5}}

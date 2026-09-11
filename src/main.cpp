@@ -7,6 +7,7 @@
 
 #include "EventTransport.hpp"
 #include "EventRecording.hpp"
+#include "Experiment.hpp"
 
 int main(int argc, char** argv) {
     try {
@@ -20,28 +21,64 @@ int main(int argc, char** argv) {
             sensor_platform::writeRecording(std::cout, events);
             return 0;
         }
-        if (command != "run") throw std::invalid_argument("Usage: sensor_platform [run [--record <path>] [--run-id <positive integer>]] | replay <path>");
+        if (command != "run" && command != "observe") throw std::invalid_argument("Usage: sensor_platform run|observe [options] | replay <path>");
         sensor_sandbox::RunId runId = 1;
         std::string recordPath;
+        std::string experiment;
+        sensor_platform::ObservationOptions observationOptions;
         bool hasRunId = false;
         for (int i = 2; i < argc; ++i) {
             const std::string option = argv[i];
             if (++i == argc) throw std::invalid_argument("Missing value for " + option);
             const std::string value = argv[i];
-            if (option == "--record" && recordPath.empty() && !value.empty()) recordPath = value;
-            else if (option == "--run-id" && !hasRunId) {
+            auto nonnegative = [&] {
+                int number{};
+                const auto parsed = std::from_chars(value.data(), value.data() + value.size(), number);
+                if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || number < 0)
+                    throw std::invalid_argument("Expected nonnegative integer for " + option);
+                return number;
+            };
+            if (option == "--experiment" && command == "run") experiment = value;
+            else if (option == "--metrics") observationOptions.metrics = value;
+            else if (option == "--delay-ms" && command == "observe") observationOptions.delayMs = nonnegative();
+            else if (option == "--pause-after" && command == "observe") observationOptions.pauseAfter = nonnegative();
+            else if (option == "--pause-ms" && command == "observe") observationOptions.pauseMs = nonnegative();
+            else if (option == "--record" && command == "run" && recordPath.empty() && !value.empty()) recordPath = value;
+            else if (option == "--run-id" && command == "run" && !hasRunId) {
                 const auto parsed = std::from_chars(value.data(), value.data() + value.size(), runId);
                 if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size() || runId == 0)
                     throw std::invalid_argument("Run ID must be a positive integer");
                 hasRunId = true;
             } else throw std::invalid_argument("Unknown or duplicate option: " + option);
         }
+        sensor_platform::Observation observation(observationOptions);
         sensor_platform::IncrementalRecording live(std::cout);
+        if (command == "observe") {
+            std::string line;
+            if (!std::getline(std::cin, line) || line != "SENSOR_EVENTS 1")
+                throw std::invalid_argument("Invalid input recording header");
+            while (std::getline(std::cin, line)) {
+                const auto event = sensor_platform::deserializeEvent("SENSOR_EVENTS 1\n" + line + "\n");
+                observation.beforeConsume();
+                live.append(event);
+                observation.mark("consumed", event.identity.streamSequence);
+            }
+            live.finish();
+            return 0;
+        }
+        auto produce = [&](const sensor_platform::EventSink& sink) {
+            auto measured = [&](const auto& event) {
+                observation.mark("produced", event.identity.streamSequence);
+                sink(event);
+            };
+            if (experiment.empty()) sensor_platform::runSample(runId, measured);
+            else sensor_platform::runExperiment(runId, experiment, measured);
+        };
         if (!recordPath.empty()) {
             std::ofstream output(recordPath, std::ios::binary | std::ios::trunc);
             if (!output) throw std::runtime_error("Cannot create recording: " + recordPath);
             sensor_platform::IncrementalRecording recording(output);
-            sensor_platform::runSample(runId, [&](const auto& event) {
+            produce([&](const auto& event) {
                 recording.append(event);
                 live.append(event);
             });
@@ -49,7 +86,7 @@ int main(int argc, char** argv) {
             output.close();
             if (!output) throw std::runtime_error("Failed to close recording: " + recordPath);
         } else {
-            sensor_platform::runSample(runId, [&](const auto& event) { live.append(event); });
+            produce([&](const auto& event) { live.append(event); });
         }
         live.finish();
     } catch (const std::exception& error) {

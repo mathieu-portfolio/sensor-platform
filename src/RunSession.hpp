@@ -15,6 +15,7 @@ public:
     std::vector<sensor_sandbox::StreamEvent> start();
     std::vector<sensor_sandbox::StreamEvent> advanceTo(float timeSeconds);
     sensor_sandbox::StreamEvent resetSensor(sensor_sandbox::SensorId id);
+    void setSensorEnabled(sensor_sandbox::SensorId id, bool enabled);
     std::vector<sensor_sandbox::StreamEvent> resetRun();
     sensor_sandbox::StreamEvent finish();
 

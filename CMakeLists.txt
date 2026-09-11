@@ -12,7 +12,7 @@ set(SENSOR_BUILD_APP OFF)
 set(SENSOR_BUILD_TESTS OFF)
 add_subdirectory("${SENSOR_SANDBOX_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/sensor-sandbox" EXCLUDE_FROM_ALL)
 
-add_library(sensor_platform_runner src/MultiSensorRunner.cpp src/RunSession.cpp src/EventTransport.cpp)
+add_library(sensor_platform_runner src/MultiSensorRunner.cpp src/RunSession.cpp src/EventTransport.cpp src/Experiment.cpp)
 target_include_directories(sensor_platform_runner PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(sensor_platform_runner PUBLIC sensor_core)
 set_target_properties(sensor_platform_runner PROPERTIES CXX_EXTENSIONS OFF)

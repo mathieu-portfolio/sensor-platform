@@ -37,6 +37,11 @@ int main(int argc, char** argv) {
             else if (key == "--group" && mode != "producer") options.group = value;
             else if (key == "--output" && mode == "recorder") options.output = value;
             else if (key == "--run-id" && mode == "producer") runId = positive<sensor_sandbox::RunId>(value);
+            else if (key == "--experiment" && mode == "producer") options.experiment = value;
+            else if (key == "--metrics") options.observation.metrics = value;
+            else if (key == "--delay-ms" && mode != "producer") options.observation.delayMs = positive<int>(value);
+            else if (key == "--pause-after" && mode != "producer") options.observation.pauseAfter = positive<std::size_t>(value);
+            else if (key == "--pause-ms" && mode != "producer") options.observation.pauseMs = positive<int>(value);
             else if (key == "--max-events" && mode == "consumer") options.maxEvents = positive<std::size_t>(value);
             else if (key == "--timeout-ms") options.timeoutMs = positive<int>(value);
             else throw std::invalid_argument("Unsupported option for mode: " + key);

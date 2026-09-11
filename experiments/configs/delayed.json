@@ -1,0 +1,1 @@
+{"name":"delayed", "run_id":105, "duration_seconds":2, "sensor_count":3, "scan_hz":[4,8,16], "seed":42, "consumer_start_delay_ms":500, "consumer_delay_ms":40}

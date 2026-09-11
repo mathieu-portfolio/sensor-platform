@@ -107,10 +107,12 @@ void publishKafka(const KafkaOptions& options, sensor_sandbox::RunId runId) {
     Topic topic(rd_kafka_topic_new(client.handle, options.topic.c_str(), nullptr), rd_kafka_topic_destroy);
     if (!topic) throw std::runtime_error("Cannot create topic handle");
     EventValidator validator;
-    runSample(runId, [&](const auto& event) {
+    Observation observation(options.observation);
+    const EventSink sink = [&](const auto& event) {
         validator.accept(event);
         const auto payload = serializeEvent(event);
         const auto key = std::to_string(event.identity.runId);
+        observation.mark("produced", event.identity.streamSequence);
         if (rd_kafka_produce(topic.get(), 0, RD_KAFKA_MSG_F_COPY,
                              const_cast<char*>(payload.data()), payload.size(),
                              key.data(), key.size(), nullptr) != 0)
@@ -118,11 +120,14 @@ void publishKafka(const KafkaOptions& options, sensor_sandbox::RunId runId) {
         // Modest synchronous boundary: next event waits for acknowledged delivery.
         checked(rd_kafka_flush(client.handle, options.timeoutMs), "Delivery timeout");
         checked(deliveryError, "Delivery failed");
-    });
+    };
+    if (options.experiment.empty()) runSample(runId, sink);
+    else runExperiment(runId, options.experiment, sink);
     validator.finish();
 }
 
 void consumeKafka(const KafkaOptions& options, bool record) {
+    Observation observation(options.observation);
     auto config = configFor(options);
     set(config.get(), "group.id", options.group);
     set(config.get(), "enable.auto.commit", "false");
@@ -173,6 +178,7 @@ void consumeKafka(const KafkaOptions& options, bool record) {
         const std::string key(message->key ? static_cast<const char*>(message->key) : "", message->key_len);
         if (key != std::to_string(event.identity.runId)) throw std::runtime_error("Kafka key/run identity mismatch");
         validator.accept(event); // Duplicates/gaps fail before output or offset commit.
+        if (message->offset >= committed) observation.beforeConsume();
         if (recording) recording->append(event);
         else if (message->offset >= committed) {
             printEvent(std::cout, event);
@@ -180,6 +186,7 @@ void consumeKafka(const KafkaOptions& options, bool record) {
             if (!std::cout) throw std::runtime_error("Viewer output failed");
         }
         if (message->offset >= committed) {
+            observation.mark("consumed", event.identity.streamSequence);
             // Commit only after the output/file flush succeeded. This is not a transaction.
             coordinatorOperation([&] { return rd_kafka_commit_message(client.handle, message.get(), 0); },
                                  options.timeoutMs, "Commit processed offset");

@@ -8,7 +8,7 @@ The intended progression is a small headless simulation boundary, independent ra
 
 The executable advances one shared world and samples it with three independently scheduled radars at 1, 2 and 4 Hz. `MultiSensorRunner` owns one `SensorSystem` per radar and passes explicit simulation time to each. CMake adds the sibling checkout with sandbox app/tests disabled; the platform runner library links `sensor_core`. No raylib, copying, vendoring, or infrastructure is involved. Extraction into a third repository remains deferred.
 
-Configuration is a C++ `std::vector<SensorConfig>` in `src/EventTransport.cpp`: sensor ID, position, heading, existing range/FOV/cadence/noise/probability parameters, and a per-sensor seed. There is no configuration file parser. The sample uses two noise-free radars and a third with noise, dropped returns and false returns enabled.
+Sample configuration is a C++ `std::vector<SensorConfig>` in `src/EventTransport.cpp`: sensor ID, position, heading, existing range/FOV/cadence/noise/probability parameters, and a per-sensor seed. The sample uses two noise-free radars and a third with noise, dropped returns and false returns enabled. Controlled experiments additionally accept the concrete JSON configuration described below.
 
 ## Build and run
 
@@ -61,6 +61,22 @@ remain visible. Identical retries are no-ops; conflicting event/run identities
 fail. The sample produces 10 scan rows and 11 measurement rows across three sensors.
 See [Historical analytics](docs/analytics.md) for schema, layout, duplicate rules,
 test commands and measured SQL results.
+
+## Load and failure experiments
+
+Run repeatable baseline, increased-load, consumer-pause, delayed-consumer and
+sensor-outage scenarios over local pipes or Kafka. Results include throughput,
+wall-clock latency percentiles, backlog/recovery, integrity checks and per-sensor
+counts; simulation timestamps remain separate.
+
+```sh
+.venv/Scripts/python.exe -m experiments run experiments/configs/pause.json build/experiments/local-pause --bin-dir build/Debug
+.venv/Scripts/python.exe -m experiments report build/experiments
+```
+
+Add `--transport kafka` with a running local broker and Kafka-enabled binaries.
+See [Experiments and performance](docs/experiments.md) for configuration, metric
+definitions, actual measurements, Kafka setup and test commands.
 
 Override the sibling location with `-DSENSOR_SANDBOX_SOURCE_DIR=/path/to/sensor-sandbox`. The build consumes that checkout's current sources; it does not pin a Git revision or modify its build directory.
 

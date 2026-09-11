@@ -37,6 +37,7 @@ MultiSensorRunner::MultiSensorRunner(std::vector<sensor_sandbox::Entity> entitie
         sensor.definition = d;
         world_.sensors().push_back(std::move(sensor));
         scanners_.emplace_back(config.seed);
+        enabled_.push_back(true);
     }
 }
 
@@ -50,11 +51,22 @@ std::vector<sensor_sandbox::SensorScan> MultiSensorRunner::advanceTo(float simul
     timeSeconds_ = simulationTimeSeconds;
     std::vector<sensor_sandbox::SensorScan> scans;
     for (std::size_t i = 0; i < scanners_.size(); ++i) {
+        if (!enabled_[i]) continue;
         if (auto scan = scanners_[i].scan(world_.sensors()[i], world_.entities(), timeSeconds_)) {
             scans.push_back(std::move(*scan));
         }
     }
     return scans;
+}
+
+void MultiSensorRunner::setSensorEnabled(sensor_sandbox::SensorId id, bool enabled) {
+    for (std::size_t i = 0; i < scanners_.size(); ++i) {
+        if (world_.sensors()[i].id == id) {
+            enabled_[i] = enabled;
+            return;
+        }
+    }
+    throw std::invalid_argument("Unknown sensor ID");
 }
 
 void MultiSensorRunner::resetSensor(sensor_sandbox::SensorId id) {

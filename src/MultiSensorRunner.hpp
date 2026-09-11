@@ -27,11 +27,14 @@ public:
     std::vector<sensor_sandbox::SensorScan> advanceTo(float simulationTimeSeconds);
     // Next poll is immediately due at the shared time; world and other streams continue.
     void resetSensor(sensor_sandbox::SensorId id);
+    // Disabled polls do not touch deadlines, sequences or RNG state. No missed-scan replay.
+    void setSensorEnabled(sensor_sandbox::SensorId id, bool enabled);
     const sensor_sandbox::WorldState& world() const { return world_; }
 
 private:
     sensor_sandbox::WorldState world_;
     std::vector<sensor_sandbox::SensorSystem> scanners_;
+    std::vector<bool> enabled_;
     float timeSeconds_{};
 };
 
