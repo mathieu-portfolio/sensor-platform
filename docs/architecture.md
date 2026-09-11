@@ -8,13 +8,25 @@ This document separates observations from proposals. sensor-platform now builds 
 
 `sensor_core` now lives in sensor-sandbox and contains presentation-independent world/motion, sensors/measurements, evaluation, tracking, scenarios, timing and instrumentation. The former presentation library is named `sensor_sandbox_presentation`. Sandbox-specific `SensorSimulation` orchestration moved to `src/app/simulation/` and builds as `sensor_sandbox_runtime`; its frame views and echo history are outside the core. Domain tests link the core directly, while the separate runtime regression suite remains runnable without raylib.
 
-sensor-platform uses CMake `add_subdirectory` on `../sensor-sandbox` (overridable with `SENSOR_SANDBOX_SOURCE_DIR`) and links `sensor_platform` only to `sensor_core`. Sandbox app/tests are disabled in this embedded build. No sources are copied, vendored, or merged; both checkouts remain independent Git repositories. Consumption uses the current sibling working tree, not a pinned or installed package. Extraction into a third repository remains deferred.
+sensor-platform uses CMake `add_subdirectory` on `../sensor-sandbox` (overridable with `SENSOR_SANDBOX_SOURCE_DIR`). `sensor_platform` links the local `sensor_platform_runner`, which links only `sensor_core`. Sandbox app/tests are disabled in this embedded build. No sources are copied, vendored, or merged; both checkouts remain independent Git repositories. Consumption uses the current sibling working tree, not a pinned or installed package. Extraction into a third repository remains deferred.
 
-The executable constructs one straight-moving entity and one 2 Hz sensor, advances world motion once per 0.25-second step, and passes explicit elapsed seconds to the scanner. It prints three scans at 0, 0.5 and 1 second. A CTest fixture checks complete output, including positions and the absence of intermediate scans.
+The first consumer proved a single straight-moving entity and one sensor. The current multi-radar runner extends that boundary as described below.
 
 Remaining coupling: scenario definitions share tuning that includes audio volume; entities retain scenario path state; tracks retain history and truth identity. The public include root is still `src`, although core headers do not include presentation headers. Procedural transit orchestration remains in the sandbox runtime. These are follow-up concerns, not reasons to import that runtime into platform.
 
-Next: prove independent per-sensor schedules against one authoritative world using one existing `SensorSystem` per sensor, with cadence/reset/order-independence tests. Tracking association cleanup can proceed separately before platform adds tracking.
+## Implemented multi-radar runner
+
+`src/MultiSensorRunner.*` owns one `WorldState` and one `SensorSystem` per configured sensor. `advanceTo(seconds)` advances entity motion once by the elapsed difference, then passes the same read-only entity state and timestamp to every scanner. It returns completed `SensorScan` values, including empty scans; not-due sensors produce no value. Results follow configuration order within a timestamp. Reordering configuration changes that merged order, but not each sensor's measurement stream or world motion. No concurrency, fusion or sandbox orchestration is involved.
+
+`SensorConfig` is defined in `src/MultiSensorRunner.hpp`; the sample configuration lives in `src/main.cpp`. It includes unique ID, position, heading, the existing `SensorDefinition` (range, FOV, refresh Hz, noise and detection/false-return probabilities), and an explicit seed. IDs and seeds are not derived from vector indices. The runner rejects duplicate IDs and invalid cadence/coverage/noise values. Sensor poses remain fixed in this milestone. The shared motion system retains its existing +/-500 world bounds.
+
+Each core scanner owns its deadline, last supplied time, sequence, detection counter, diagnostic counters and seed. Its first valid call binds the sensor ID until reset, preventing accidental multiplexing through one instance. Seed zero preserves sandbox behavior. Noise/drop/false-return calculations use only local seed, sensor/entity identity, scan count and supplied simulation time; there is no shared RNG. Repeatability is for the same inputs and time sequence in the same numeric environment, not bitwise portability across math libraries.
+
+The first call is due. Subsequent polls use the existing 0.1 ms deadline tolerance. Late polls sample current state once and set the next deadline from that acquisition time; missed historical scans are not synthesized. Thus a coarse polling schedule can undersample a configured cadence. `resetSensor(id)` retains the seed, clears only that scanner's counters/binding and makes its next poll due at the shared timestamp. It does not rewind the world or other sensors. Detection IDs and sequences restart, so consumers must distinguish reset epochs before persisting output.
+
+The sample runs radars at 1/2/4 Hz against one straight-moving entity at quarter-second timestamps. They emit 2/3/5 scans over [0,1] seconds. The third radar enables noise, drop probability and false returns. Tests cover independent cadences/reset, full seeded measurement equality after reordering/removing sensors, repeated runs, one world update per timestamp, empty coverage, invalid inputs, and executable output.
+
+Next: typed event contracts for scan completion and run/configuration/reset identity, then deterministic recording/replay with explicit time and ordering rules. A synchronous direct consumer is sufficient initially; a bus is not required. Tracking association cleanup remains separate work before platform tracking.
 
 ## First boundary implementation
 

@@ -10,7 +10,7 @@ Exit: README, architecture assessment, and this roadmap agree on implemented ver
 
 ## 1. Prove a small headless world-to-sensor boundary
 
-Implementation update: the first small slice was implemented directly in sensor-sandbox instead of creating the originally proposed platform-owned probe below. It provides a raylib-free simulation/test build and an explicit single-sensor scan API with timestamped results and deterministic timing tests. Existing world motion, scenarios, and tracking remain canonical there. No shared package was extracted. The original broader criteria below remain a guide, not a claim that truth metadata, presentation headers, or the whole domain model have already been separated. The measurement truth split is now implemented: normal detections/scans have no truth IDs, optional evaluation annotations are separate, and a named truth-association adapter preserves the tracker baseline. The tracker still stores and matches entity IDs. The reusable-library milestone is now complete: sensor-sandbox owns sensor_core, and sensor-platform consumes it through sibling add_subdirectory without presentation dependencies. Extraction into a third repository is deferred. The next small step is independent per-sensor scheduling against one world; tracker association cleanup remains separate work before platform tracking.
+Implementation update: the first small slice was implemented directly in sensor-sandbox instead of creating the originally proposed platform-owned probe below. It provides a raylib-free simulation/test build and an explicit single-sensor scan API with timestamped results and deterministic timing tests. Existing world motion, scenarios, and tracking remain canonical there. No shared package was extracted. The original broader criteria below remain a guide, not a claim that truth metadata, presentation headers, or the whole domain model have already been separated. The measurement truth split is now implemented: normal detections/scans have no truth IDs, optional evaluation annotations are separate, and a named truth-association adapter preserves the tracker baseline. The tracker still stores and matches entity IDs. The reusable-library milestone is now complete: sensor-sandbox owns sensor_core, and sensor-platform consumes it through sibling add_subdirectory without presentation dependencies. Extraction into a third repository is deferred. Independent per-sensor scheduling is now implemented in milestone 2; tracker association cleanup remains separate work before platform tracking.
 
 Scope: a minimal C++20/CMake boundary probe inside radar-platform with one scripted straight-moving entity, one configured radar, and explicit simulation steps. Represent world state with native values; update the world once, then pass read-only state to a sensor operation. Return an explicit scan result that distinguishes not-due from completed-with-zero-detections. Keep sensor runtime state separate from world state. This probe now uses the canonical sibling sensor_core target; it is not a full sandbox port.
 
@@ -24,21 +24,21 @@ Exit criteria:
 - Tests show sensor observation does not mutate world state; no rendering or audio type appears in public domain headers.
 - A short design decision records the proven API boundary and the preferred canonical core owner/consumption plan. It identifies adapter work and behavior tests needed before extraction. No repository relocation is needed to finish this milestone.
 
-## 2. Independent radars in one process
+## 2. Independent radars in one process (implemented)
 
-Scope: extend the proven slice to two radars observing the same world, with different positions, scan rates, sweep/configuration, and independent deterministic state. Define missed-deadline handling and deterministic ordering. Add noise/drop/false-return behavior incrementally with a stated seed policy. Resolve canonical code ownership before growing a second full implementation; any extraction or sandbox adapter belongs in a separately scoped change with regression checks.
+Implemented: MultiSensorRunner in sensor-platform owns one authoritative world and one seeded SensorSystem per configured radar. The sample uses three fixed poses and rates of 1/2/4 Hz. World motion advances once per supplied timestamp; each scanner independently decides whether it is due. Noise/drop/false-return state and reset are local. Late polls sample once without catch-up. Tests verify per-stream reorder/removal independence, reset isolation, seeded repeatability and shared-world motion. Canonical core ownership remains sensor-sandbox; repository extraction is deferred.
 
 Exit criteria:
 
-- A two-radar scenario advances entity motion once per tick and demonstrates different scan schedules.
-- Adding/reordering/disabling radar B does not change radar A's output or world trajectory for the same run inputs.
-- IDs and acquisition times unambiguously identify each scan/observation; reset restores reproducible behavior.
+- The three-radar sample advances entity motion once per tick and demonstrates different scan schedules.
+- Including, reordering or omitting radar C does not change A/B output or world trajectory for the same run inputs.
+- Sensor ID, local sequence and acquisition time identify scans within a reset epoch. Repeating the same seed/world/time sequence reproduces output; durable reset identity remains milestone 3 work.
 - Independent sensor counters are validated, including completed scans with no returns.
-- If reuse is introduced here, both consumers build against the same selected core revision, and the sandbox's relevant regression tests and interactive smoke check pass. Otherwise record why sharing remains deferred without accumulating an untracked fork.
+- Both consumers build against the same sibling core checkout. Headless and app-enabled regression tests and the interactive build pass; manual GUI validation is separate.
 
-## 3. Typed local events and explicit tracking inputs
+## 3. Typed local events and explicit tracking inputs (next)
 
-Scope: introduce small typed contracts and a synchronous in-memory bus outside the core. Publish scan completion/observations and run/configuration transitions. Add one tracker per radar and publish lifecycle changes, including removals. Reuse prediction rules after characterizing them. A truth-assisted baseline may be used only through an explicit adapter; it is not an association/fusion result.
+Scope: introduce small typed contracts for scan completion/observations and run/configuration/reset transitions outside the core, then connect them directly to deterministic recording/replay in milestone 4. Define stable run and reset-epoch identity before recording local scan/detection IDs. A synchronous direct consumer suffices initially; add a bus only for a concrete need. Explicit tracking inputs and per-radar tracking can follow separately, reusing prediction rules after characterization. Any truth-assisted baseline remains an explicit adapter, not an association/fusion result.
 
 Exit criteria:
 
@@ -113,4 +113,4 @@ Exit criteria:
 - At least one measured bottleneck has a before/after comparison with unchanged correctness criteria.
 - Publish reproducible commands and findings, including limitations and tradeoffs.
 
-No future component needs a placeholder directory now. Continue with independent per-sensor scheduling in milestone 2; retain the shared core in sensor-sandbox.
+No future component needs a placeholder directory now. Continue with typed event contracts and deterministic recording/replay in milestones 3-4; retain the shared core in sensor-sandbox.
