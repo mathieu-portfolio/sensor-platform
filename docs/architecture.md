@@ -16,7 +16,21 @@ Time must be finite, nonnegative, and nondecreasing until reset. The first call 
 
 The interactive application still supplies frame deltas to `SensorSimulation`, which advances its own elapsed time before invoking the sensor. No new render clock, accumulator, or physics policy is introduced. Headless callers can provide a fixed simulation schedule directly. Identical inputs and schedules are reproducible in the same numeric environment; different late-call schedules are not promised to be equivalent. Tests cover world observation, deadlines, polling, late calls, invalid time, reset with noise/drop/false returns, and pause/resume integration.
 
-The canonical code stays in sensor-sandbox for now. Remaining coupling includes the rendering-owned frame header, mixed tuning, scenario state, and truth-assisted tracking. `Detection::sourceEntityId` is retained for compatibility, so separating evaluation truth from observations is still unfinished work. The smaller scan API does not constitute multi-radar support or a general reusable package. Revisit extraction only when a second consumer needs it.
+The canonical code stays in sensor-sandbox for now. Remaining coupling includes the rendering-owned frame header, mixed tuning, scenario state, and truth-assisted tracking. Measurement truth is now separated as described below; the legacy tracker still associates by entity ID through an explicit compatibility input. The smaller scan API does not constitute multi-radar support or a general reusable package. Revisit extraction only when a second consumer needs it.
+
+## Measurement truth separation
+
+`Detection` now contains only detection ID, sensor ID, estimated position, confidence, and uncertainty radius. Acquisition time and scan sequence remain in `SensorScan`, whose header can be consumed without world/evaluation headers. Neither type contains a truth link. Visual age moved into `DetectionEcho`, together with debug false-return coloring.
+
+The simulator optionally fills a separate vector of `DetectionTruth` through the scanner's `evaluationTruth` output argument. Each annotation is keyed by sensor ID and detection ID and has an optional source entity ID: no entity means a known simulated false return. Omitting this output does not alter measurements or timing. A valid call replaces the vector, including clearing it when no scan is due. Annotations belong to that scan/run only; callers must not reuse them across reset because IDs restart.
+
+`associateUsingTruth` joins processed measurements to annotations by identity, preserving measurement order even after filtering/reordering. It rejects missing or duplicate matching annotations and skips known false returns. Its `TruthAssociatedDetection` output is explicitly for the existing tracker. The tracker still stores `Track::sourceEntityId` and matches on that identity; its prediction and lifecycle algorithms are unchanged. This preserves the sandbox baseline, not realistic association. Simulation orchestration also uses annotations for debug colors and false-return timeline labels, without placing them back into normal measurements.
+
+The next small boundary step is separating association decisions from tracker state updates so truth identity can remain solely in the compatibility adapter. No measurement-based association, multi-radar behavior, transport, or package extraction is implemented here.
+
+Validation: 55 headless tests and 60 app-enabled tests passed on Windows/MSVC using the existing pinned GoogleTest source. The interactive executable built. Tests cover truth-free consumption, optional metadata capture, keyed joins, missing/duplicate annotations, reset, tracker continuity, and debug echo behavior. No manual GUI smoke test was performed.
+
+## Original inspection baseline
 
 The sibling sensor-sandbox was inspected on 2026-09-10 at commit `e1fd8f4a2ff4990b4a3a232190bce3a8a7f1ba3e` (`Updated readme and docs`), with a clean Git working tree. Inspection covered the tracked source/header files, all tests, CMake configuration and scripts, documentation, content descriptors, and asset declarations. Generated build trees and dependency internals are not project architecture. The source was not modified or rebuilt during this documentation initialization. Existing test behavior below is based on reading tests, not a fresh execution result.
 
