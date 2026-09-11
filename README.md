@@ -20,9 +20,23 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Run `build/Debug/sensor_platform.exe` with Visual Studio, or `./build/sensor_platform` with a single-configuration generator. Over 0 through 1 second, inclusive, sensors 1/2/3 produce 2/3/5 scans. Every scan prints sensor ID, local sequence, acquisition time and measurement count; each measurement also carries sensor ID. World X advances from 100 to 110 once across the run, regardless of sensor count. Tests cover schedules, shared-world motion, independent reset, seeded repeatability, sensor reorder/removal, invalid inputs and the executable output.
+Run `build/Debug/sensor_platform.exe` with Visual Studio, or `./build/sensor_platform` with a single-configuration generator. Over 0 through 1 second, inclusive, sensors 1/2/3 produce 2/3/5 scans. The typed output includes run/sensor lifecycle records and complete scan records with identities, acquisition timestamps and measurement tuples. World X advances from 100 to 110 once across the run, regardless of sensor count. Tests cover schedules, shared-world motion, independent reset, seeded repeatability, sensor reorder/removal, invalid inputs and the executable output.
 
-The runner samples at caller-provided timestamps (0.25-second steps in the sample). A late poll observes the current world once and schedules from that time; it does not reconstruct missed scans. Resetting one sensor restarts only its local sequence/deadline, retaining its seed. The shared clock and world continue. Sequence and detection IDs are local to a sensor between resets; they are not durable identifiers across resets. The next milestone is typed event contracts with explicit run/reset identity, followed by deterministic recording/replay.
+The runner samples at caller-provided timestamps (0.25-second steps in the sample). A late poll observes the current world once and schedules from that time; it does not reconstruct missed scans. Resetting one sensor restarts only its local sequence/deadline, retaining its seed. The shared clock and world continue. Sequence and detection IDs are local to a sensor between resets; they are not durable identifiers across resets. RunSession now wraps these local identities in explicit run/sensor generations and a global event sequence.
+
+Record and replay the same sample (Visual Studio paths shown):
+
+```sh
+build/Debug/sensor_platform.exe run --run-id 42 --record build/sample.events
+build/Debug/sensor_platform.exe replay build/sample.events
+```
+
+No arguments still runs the live sample. Live stdout, the recorded file, and replay
+stdout contain the same ordered typed records (apart from OS line endings).
+Recording replaces the specified file. Replay validates the complete file before
+output; it never reruns the simulation. The inspectable versioned text format,
+identity rules and limits are documented in [Event recording](docs/event-recording.md).
+The next milestone is Kafka-backed transport and process separation using these contracts.
 
 Override the sibling location with `-DSENSOR_SANDBOX_SOURCE_DIR=/path/to/sensor-sandbox`. The build consumes that checkout's current sources; it does not pin a Git revision or modify its build directory.
 

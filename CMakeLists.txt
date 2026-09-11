@@ -12,13 +12,18 @@ set(SENSOR_BUILD_APP OFF)
 set(SENSOR_BUILD_TESTS OFF)
 add_subdirectory("${SENSOR_SANDBOX_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/sensor-sandbox" EXCLUDE_FROM_ALL)
 
-add_library(sensor_platform_runner src/MultiSensorRunner.cpp)
+add_library(sensor_platform_runner src/MultiSensorRunner.cpp src/RunSession.cpp)
 target_include_directories(sensor_platform_runner PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(sensor_platform_runner PUBLIC sensor_core)
 set_target_properties(sensor_platform_runner PROPERTIES CXX_EXTENSIONS OFF)
 
+add_library(sensor_platform_recording src/EventRecording.cpp)
+target_include_directories(sensor_platform_recording PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(sensor_platform_recording PUBLIC sensor_core)
+set_target_properties(sensor_platform_recording PROPERTIES CXX_EXTENSIONS OFF)
+
 add_executable(sensor_platform src/main.cpp)
-target_link_libraries(sensor_platform PRIVATE sensor_platform_runner)
+target_link_libraries(sensor_platform PRIVATE sensor_platform_runner sensor_platform_recording)
 set_target_properties(sensor_platform PROPERTIES CXX_EXTENSIONS OFF)
 
 include(CTest)
@@ -26,7 +31,11 @@ if(BUILD_TESTING)
     add_executable(sensor_platform_tests tests/MultiSensorRunnerTests.cpp)
     target_link_libraries(sensor_platform_tests PRIVATE sensor_platform_runner)
     add_test(NAME platform_multi_sensor_runner COMMAND sensor_platform_tests)
+    add_executable(sensor_platform_event_tests tests/EventRecordingTests.cpp)
+    target_link_libraries(sensor_platform_event_tests PRIVATE sensor_platform_runner sensor_platform_recording)
+    add_test(NAME platform_events_and_replay COMMAND sensor_platform_event_tests)
     add_test(NAME platform_headless_measurements
         COMMAND "${CMAKE_COMMAND}" "-DPLATFORM_EXE=$<TARGET_FILE:sensor_platform>"
+            "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_output.cmake")
 endif()

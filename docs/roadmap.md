@@ -32,36 +32,38 @@ Exit criteria:
 
 - The three-radar sample advances entity motion once per tick and demonstrates different scan schedules.
 - Including, reordering or omitting radar C does not change A/B output or world trajectory for the same run inputs.
-- Sensor ID, local sequence and acquisition time identify scans within a reset epoch. Repeating the same seed/world/time sequence reproduces output; durable reset identity remains milestone 3 work.
+- Sensor ID, local sequence and acquisition time identify scans within a reset epoch. Repeating the same seed/world/time sequence reproduces output; explicit reset identity is now implemented in milestone 3.
 - Independent sensor counters are validated, including completed scans with no returns.
 - Both consumers build against the same sibling core checkout. Headless and app-enabled regression tests and the interactive build pass; manual GUI validation is separate.
 
-## 3. Typed local events and explicit tracking inputs (next)
+## 3. Typed local events (implemented)
 
-Scope: introduce small typed contracts for scan completion/observations and run/configuration/reset transitions outside the core, then connect them directly to deterministic recording/replay in milestone 4. Define stable run and reset-epoch identity before recording local scan/detection IDs. A synchronous direct consumer suffices initially; add a bus only for a concrete need. Explicit tracking inputs and per-radar tracking can follow separately, reusing prediction rules after characterization. Any truth-assisted baseline remains an explicit adapter, not an association/fusion result.
+Core contracts now cover run start/reset/finish, sensor start/reset and completed
+measurement scans. Platform RunSession assigns explicit run/sensor generations,
+preserves acquisition time and orders simultaneous scans by sensor ID. Global
+stream sequence continues across resets. Empty completed scans remain visible;
+evaluation truth and legacy tracker events are excluded.
 
-Exit criteria:
+Validation covers lifecycle identity, reset isolation, configuration reorder,
+contiguous ordering and truth-free contracts. Per-radar tracking and association
+cleanup remain separate follow-up work; no bus is needed for the current consumer.
 
-- Tracker and diagnostics consume the same facts without parsing labels or reading mutable world state.
-- Run/producer identity, sequence, simulation time, payload ownership, delivery order, and subscriber failure behavior are documented and tested.
-- Zero-return scans, no-scan intervals, resets, configuration changes, and deleted tracks have unambiguous semantics.
-- Tests prevent simultaneous observations from different radars being accidentally treated as sequential updates to a shared track.
-- The core builds without the bus or any transport; no serialization dependency is required yet.
+## 4. Recording and deterministic replay (implemented)
 
-## 4. Recording and deterministic replay
+Platform owns a versioned line-oriented text format and read/write validation.
+The CLI records the actual typed stream and replays saved events without running
+simulation. Full-precision measurement fields and original timestamps round-trip.
+The same formatter serves both paths; per-sensor downstream totals also match.
 
-Scope: choose a minimal versioned local recording format for typed facts and run metadata. Replay recorded observations and time progression through tracking; separately support seed-driven regeneration only if its full inputs are captured. Do not treat the sandbox timeline as a recording format.
+Validation covers multi-radar recording, empty scans, independent sensor and
+whole-run resets, exact typed/text equivalence, malformed records, unsupported
+versions and truncated files failing before any replay output. Complete runs are
+buffered in memory. Full world/configuration regeneration, tracking replay and
+incremental crash recovery are outside this milestone.
 
-Exit criteria:
+## 5. Transport adapter and separate processes (next)
 
-- A saved run reproduces ordered tracker transitions and final state with documented numeric tolerance, including long detection gaps and a configuration change.
-- Run/model/configuration versions, seeds, time policy, event order, and reset boundaries are captured.
-- Truncated/corrupt records and unsupported versions fail clearly; tests cover each.
-- Playback pacing does not change simulation results. The format and replay guarantee are documented before any broker is introduced.
-
-## 5. Transport adapter and separate processes
-
-Scope: introduce Kafka only now, for a concrete sensor-event producer and tracker or recorder consumer. Keep a local path for comparison. The world remains owned by one coordinator; initially sensors may stay colocated with it while downstream consumers run separately. Remote sensor execution is optional later and would consume authoritative snapshots, never own physics.
+Scope: introduce Kafka as an adapter over the implemented event contracts, for a concrete sensor-event producer and recorder/measurement consumer. Keep a local path for comparison. The world remains owned by one coordinator; initially sensors may stay colocated with it while downstream consumers run separately. Remote sensor execution is optional later and would consume authoritative snapshots, never own physics.
 
 Exit criteria:
 
@@ -113,4 +115,4 @@ Exit criteria:
 - At least one measured bottleneck has a before/after comparison with unchanged correctness criteria.
 - Publish reproducible commands and findings, including limitations and tradeoffs.
 
-No future component needs a placeholder directory now. Continue with typed event contracts and deterministic recording/replay in milestones 3-4; retain the shared core in sensor-sandbox.
+No future component needs a placeholder directory now. Continue with Kafka-backed transport and process separation in milestone 5, reusing the existing contracts; retain the shared core in sensor-sandbox.

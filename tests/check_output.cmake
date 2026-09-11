@@ -1,33 +1,49 @@
-execute_process(COMMAND "${PLATFORM_EXE}" RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+execute_process(COMMAND "${PLATFORM_EXE}" RESULT_VARIABLE result OUTPUT_VARIABLE live ERROR_VARIABLE error)
 if(NOT result STREQUAL "0")
-    message(FATAL_ERROR "Platform failed (${result}): ${error}")
+    message(FATAL_ERROR "Live sample failed: ${error}")
 endif()
-execute_process(COMMAND "${PLATFORM_EXE}" RESULT_VARIABLE repeated_result OUTPUT_VARIABLE repeated)
-if(NOT repeated_result STREQUAL "0" OR NOT output STREQUAL repeated)
-    message(FATAL_ERROR "Sample run is not deterministic")
+set(recording "${TEST_DIR}/sample-test.events")
+execute_process(COMMAND "${PLATFORM_EXE}" run --record "${recording}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE recorded ERROR_VARIABLE error)
+if(NOT result STREQUAL "0")
+    message(FATAL_ERROR "Recording failed: ${error}")
 endif()
-# Check the actual executable's three independent schedules and merged ordering.
-string(REGEX MATCHALL "sensor=[0-9]+ scan=[0-9]+ time=[0-9.]+" headers "${output}")
-set(expected
-    "sensor=1 scan=1 time=0.00"
-    "sensor=2 scan=1 time=0.00"
-    "sensor=3 scan=1 time=0.00"
-    "sensor=3 scan=2 time=0.25"
-    "sensor=2 scan=2 time=0.50"
-    "sensor=3 scan=3 time=0.50"
-    "sensor=3 scan=4 time=0.75"
-    "sensor=1 scan=2 time=1.00"
-    "sensor=2 scan=3 time=1.00"
-    "sensor=3 scan=5 time=1.00")
-if(NOT headers STREQUAL expected)
-    message(FATAL_ERROR "Unexpected multi-sensor schedules:\n${output}")
+execute_process(COMMAND "${PLATFORM_EXE}" replay "${recording}"
+    RESULT_VARIABLE result OUTPUT_VARIABLE replayed ERROR_VARIABLE error)
+if(NOT result STREQUAL "0")
+    message(FATAL_ERROR "Replay failed: ${error}")
 endif()
-foreach(measurement IN ITEMS
-    "sensor=1 detection=2 position=(110.00, 0.00)"
-    "sensor=2 detection=3 position=(110.00, 0.00)"
-    "sensor=3 detection=1 position=")
-    string(FIND "${output}" "${measurement}" found)
+file(READ "${recording}" saved)
+foreach(name IN ITEMS live recorded replayed saved)
+    string(REPLACE "\r\n" "\n" ${name} "${${name}}")
+endforeach()
+if(NOT live STREQUAL recorded OR NOT recorded STREQUAL replayed OR NOT saved STREQUAL replayed)
+    message(FATAL_ERROR "Live, saved and replayed streams differ")
+endif()
+string(REGEX MATCHALL "MEASUREMENTS [^\n]+" scans "${live}")
+list(LENGTH scans count)
+if(NOT count EQUAL 10)
+    message(FATAL_ERROR "Expected ten scans across three radars")
+endif()
+foreach(expected IN ITEMS
+    "MEASUREMENTS 1 0 5 0 1 0 1 1"
+    "MEASUREMENTS 1 0 6 0 2 0 1 1"
+    "MEASUREMENTS 1 0 7 0 3 0 1"
+    "MEASUREMENTS 1 0 12 1 1 0 2 1"
+    "MEASUREMENTS 1 0 13 1 2 0 3 1"
+    "MEASUREMENTS 1 0 14 1 3 0 5"
+    "RUN_FINISHED 1 0 15 1")
+    string(FIND "${live}" "${expected}" found)
     if(found EQUAL -1)
-        message(FATAL_ERROR "Missing measurement ${measurement}:\n${output}")
+        message(FATAL_ERROR "Missing expected event: ${expected}\n${live}")
     endif()
 endforeach()
+
+# A line-boundary truncation must fail without emitting any partial observable stream.
+string(REGEX REPLACE "RUN_FINISHED[^\n]*\n" "" truncated "${saved}")
+file(WRITE "${TEST_DIR}/truncated-test.events" "${truncated}")
+execute_process(COMMAND "${PLATFORM_EXE}" replay "${TEST_DIR}/truncated-test.events"
+    RESULT_VARIABLE result OUTPUT_VARIABLE partial ERROR_VARIABLE error)
+if(result STREQUAL "0" OR NOT partial STREQUAL "" OR NOT error MATCHES "missing RUN_FINISHED")
+    message(FATAL_ERROR "Truncated recording did not fail cleanly: ${error}")
+endif()
