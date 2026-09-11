@@ -18,7 +18,7 @@ Remaining coupling: scenario definitions share tuning that includes audio volume
 
 `src/MultiSensorRunner.*` owns one `WorldState` and one `SensorSystem` per configured sensor. `advanceTo(seconds)` advances entity motion once by the elapsed difference, then passes the same read-only entity state and timestamp to every scanner. It returns completed `SensorScan` values, including empty scans; not-due sensors produce no value. Results follow configuration order within a timestamp. Reordering configuration changes that merged order, but not each sensor's measurement stream or world motion. No concurrency, fusion or sandbox orchestration is involved.
 
-`SensorConfig` is defined in `src/MultiSensorRunner.hpp`; the sample configuration lives in `src/main.cpp`. It includes unique ID, position, heading, the existing `SensorDefinition` (range, FOV, refresh Hz, noise and detection/false-return probabilities), and an explicit seed. IDs and seeds are not derived from vector indices. The runner rejects duplicate IDs and invalid cadence/coverage/noise values. Sensor poses remain fixed in this milestone. The shared motion system retains its existing +/-500 world bounds.
+`SensorConfig` is defined in `src/MultiSensorRunner.hpp`; the sample configuration lives in `src/EventTransport.cpp`. It includes unique ID, position, heading, the existing `SensorDefinition` (range, FOV, refresh Hz, noise and detection/false-return probabilities), and an explicit seed. IDs and seeds are not derived from vector indices. The runner rejects duplicate IDs and invalid cadence/coverage/noise values. Sensor poses remain fixed in this milestone. The shared motion system retains its existing +/-500 world bounds.
 
 Each core scanner owns its deadline, last supplied time, sequence, detection counter, diagnostic counters and seed. Its first valid call binds the sensor ID until reset, preventing accidental multiplexing through one instance. Seed zero preserves sandbox behavior. Noise/drop/false-return calculations use only local seed, sensor/entity identity, scan count and supplied simulation time; there is no shared RNG. Repeatability is for the same inputs and time sequence in the same numeric environment, not bitwise portability across math libraries.
 
@@ -30,9 +30,38 @@ The sample runs radars at 1/2/4 Hz against one straight-moving entity at quarter
 
 Core `StreamEvent` values model run start/reset/finish, sensor start/reset and completed radar scans without evaluation truth. Platform `RunSession` owns run identity, run/sensor generations and monotonically increasing stream sequence. It wraps the existing multi-radar runner, sorting sensor IDs for deterministic merged ordering. Resetting the scenario restores initial state and emits a new run generation; resetting one sensor changes only its sensor generation.
 
-`sensor_platform_recording` owns all text encoding, persistence validation and replay decoding. Live and replay paths pass the same typed events to the same output formatter. The versioned line format preserves every measurement field and float timestamp exactly. Replay loads and validates the complete recording before output and never runs the sensor simulation. A required final event catches line-boundary truncation. The current implementation buffers small completed runs; it is not an incremental journal.
+`sensor_platform_recording` owns all text encoding, persistence validation and replay decoding. Live and replay paths pass the same typed events to the same output formatter. The versioned line format preserves every measurement field and float timestamp exactly. Replay loads and validates the complete recording before output and never runs the sensor simulation. A required final event catches line-boundary truncation. IncrementalRecording validates and flushes one event at a time; only replay retains a complete event vector.
 
-See [Event recording](event-recording.md) for the contract, file grammar and validation rules. Tests compare typed fields, observable text and per-sensor downstream totals, including empty scans and sensor/world resets. Tracking events and full scenario regeneration are deferred. Next is Kafka-backed transport and process separation over the same contracts; persistence remains owned by platform and no broker/network code is present.
+See [Event recording](event-recording.md) for the contract, file grammar and validation rules. Tests compare typed fields, observable text and per-sensor downstream totals, including empty scans and sensor/world resets. Tracking events and full scenario regeneration are deferred. Kafka is now an optional platform adapter over the same contracts; persistence remains owned by platform.
+
+## Kafka process boundary
+
+`EventSink` is a synchronous callback for one concrete StreamEvent. The local
+sample and Kafka producer call the same `runSample` producer without buffering
+the complete run. The Kafka executable offers producer, consumer and recorder
+modes. Viewer and recorder use separate groups over one fully retained,
+single-partition topic per run. No sensor_core change is needed.
+
+Each Kafka value contains the existing version header and one event line, keyed
+by run ID. Producer idempotence and per-event acknowledgement preserve order
+within partition 0. Consumers validate before output and commit after flush.
+Viewer restart rebuilds validation from the prefix, then emits the uncommitted
+suffix. Recorder restart rebuilds its entire file incrementally from Kafka.
+Crashes can duplicate visible output; file writes and commits are not atomic.
+
+See [Kafka development](kafka.md) for exact commands, group restrictions,
+retention requirements and the integration validation script. Replay still
+rejects incomplete/malformed files before emitting anything. Next is controlled
+failure/recovery and durable consumer checkpoint handling.
+
+Validation on Windows/MSVC: 61 headless and 66 app-enabled sandbox tests passed,
+including the interactive build; all three platform suites passed in local and
+Kafka-enabled builds. The real Kafka 4.0.0 integration script passed queued
+delivery, independent groups, exact local/file/replay equality, six-event viewer
+restart, completed offsets and recorder reconstruction. Docker Compose syntax
+validated, but Docker startup was blocked by unavailable WSL virtualization.
+The broker integration ran against the same Kafka release directly on Java 21;
+container startup itself remains to be checked on a Docker-capable host.
 
 ## First boundary implementation
 

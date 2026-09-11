@@ -71,8 +71,8 @@ Live: world/scanners -> RunSession -> typed events -> shared formatter + file.
 Replay: file -> full parse/lifecycle validation -> typed events -> same formatter.
 Replay never constructs a world, advances a clock, or invokes a scanner.
 
-The current small runner buffers the completed run in memory. Recording writes
-those exact events; replay validates the whole recording before delivering any
+Live recording now validates, appends and flushes each event incrementally.
+Replay validates the whole recording before delivering any
 events. Unknown types/versions, invalid or extra fields, nonfinite values,
 sequence gaps, undeclared sensor identities, invalid resets and missing final
 RUN_FINISHED fail with an error and nonzero CLI exit. A partial file from an
@@ -85,6 +85,6 @@ the stochastic model. Tests compare every typed field, canonical text and
 downstream per-sensor scan/measurement totals, including empty scans and resets.
 There are no track events or replay pacing options in this milestone.
 
-Kafka remains a future transport adapter over these same contracts. Run identity,
-ordering, duplication and recovery policies must be made explicit when adding
-broker-backed delivery and separating producer/consumer processes.
+Kafka now transports these same versioned event records. See [Kafka development](kafka.md)
+for topic/offset strategy and actual delivery guarantees. EventValidator retains only
+per-sensor counters and lifecycle state while checking the incremental stream.

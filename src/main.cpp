@@ -5,38 +5,8 @@
 #include <string>
 #include <iostream>
 
-#include "RunSession.hpp"
+#include "EventTransport.hpp"
 #include "EventRecording.hpp"
-
-std::vector<sensor_sandbox::StreamEvent> sampleRun(sensor_sandbox::RunId runId) {
-    using namespace sensor_sandbox;
-    using sensor_platform::SensorConfig;
-
-    Entity entity;
-    entity.id = 1;
-    entity.label = "Straight transit";
-    entity.position = {100.0f, 0.0f};
-    entity.velocity = {10.0f, 0.0f};
-
-    // Concrete in-process configuration; each seed belongs to its sensor ID.
-    const std::vector<SensorConfig> configs{
-        {.id = 1, .position = {0, 0},
-         .definition = {.range = 200, .refreshRateHz = 1}, .seed = 11},
-        {.id = 2, .position = {50, 20},
-         .definition = {.range = 150, .refreshRateHz = 2}, .seed = 22},
-        {.id = 3, .position = {150, -20},
-         .definition = {.range = 100, .refreshRateHz = 4, .rangeNoise = 2,
-                        .detectionProbability = 0.75f, .falsePositiveRateHz = 1}, .seed = 33}
-    };
-    sensor_platform::RunSession session(runId, {entity}, configs);
-    auto events = session.start();
-    for (int step = 0; step <= 4; ++step) {
-        auto batch = session.advanceTo(static_cast<float>(step) * 0.25f);
-        events.insert(events.end(), std::make_move_iterator(batch.begin()), std::make_move_iterator(batch.end()));
-    }
-    events.push_back(session.finish());
-    return events;
-}
 
 int main(int argc, char** argv) {
     try {
@@ -66,15 +36,22 @@ int main(int argc, char** argv) {
                 hasRunId = true;
             } else throw std::invalid_argument("Unknown or duplicate option: " + option);
         }
-        const auto events = sampleRun(runId);
+        sensor_platform::IncrementalRecording live(std::cout);
         if (!recordPath.empty()) {
             std::ofstream output(recordPath, std::ios::binary | std::ios::trunc);
             if (!output) throw std::runtime_error("Cannot create recording: " + recordPath);
-            sensor_platform::writeRecording(output, events);
+            sensor_platform::IncrementalRecording recording(output);
+            sensor_platform::runSample(runId, [&](const auto& event) {
+                recording.append(event);
+                live.append(event);
+            });
+            recording.finish();
             output.close();
             if (!output) throw std::runtime_error("Failed to close recording: " + recordPath);
+        } else {
+            sensor_platform::runSample(runId, [&](const auto& event) { live.append(event); });
         }
-        sensor_platform::writeRecording(std::cout, events);
+        live.finish();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

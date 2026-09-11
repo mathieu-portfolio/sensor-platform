@@ -1,4 +1,5 @@
 #include "RunSession.hpp"
+#include "EventTransport.hpp"
 #include "EventRecording.hpp"
 
 #include <algorithm>
@@ -214,8 +215,54 @@ void lifecycleAndPrecision() {
 }
 }
 
+void incrementalAndTransport() {
+    const auto events = run();
+    std::ostringstream output;
+    IncrementalRecording writer(output);
+    EventValidator validator;
+    std::size_t previousSize = output.str().size();
+    for (std::size_t i = 0; i < events.size(); ++i) {
+        const auto message = serializeEvent(events[i]);
+        const auto decoded = deserializeEvent(message);
+        sameEvents({events[i]}, {decoded});
+        // A local handler and a serialized transport handler accept the same concrete type.
+        EventSink sink = [&](const auto& event) { writer.append(event); };
+        sink(decoded);
+        check(output.str().size() > previousSize, "recording buffered an event");
+        previousSize = output.str().size();
+        validator.accept(events[i]);
+        if (i + 1 < events.size()) rejects([&] { decode(output.str()); });
+        if (i == 0) {
+            rejects([&] { validator.accept(events[i]); }); // duplicate
+            rejects([&] { validator.accept(events[i + 2]); }); // missing sequence
+            rejects([&] { writer.append(events[i]); }); // no duplicate reaches the file
+            check(output.str().size() == previousSize, "rejected duplicate changed recording");
+        }
+    }
+    validator.finish();
+    writer.finish();
+    check(output.str() == encode(events), "incremental recording differs from complete recording");
+    rejects([&] { deserializeEvent("SENSOR_EVENTS 2\nRUN_STARTED 1 0 1 0\n"); });
+    rejects([&] { deserializeEvent(serializeEvent(events[0]) + "RUN_FINISHED 1 0 2 0\n"); });
+
+    std::ostringstream direct, transported;
+    IncrementalRecording directWriter(direct), transportWriter(transported);
+    runSample(42, [&](const auto& event) { directWriter.append(event); });
+    runSample(42, [&](const auto& event) { transportWriter.append(deserializeEvent(serializeEvent(event))); });
+    directWriter.finish();
+    transportWriter.finish();
+    check(direct.str() == transported.str(), "sample depends on transport");
+    int delivered = 0;
+    rejects([&] { runSample(42, [&](const auto&) {
+        ++delivered;
+        throw std::runtime_error("sink unavailable");
+    }); });
+    check(delivered == 1, "producer continued after sink failure");
+}
+
 int main() {
     try {
+        incrementalAndTransport();
         orderingIdentityAndReplay();
         malformedAndTruncated();
         lifecycleAndPrecision();

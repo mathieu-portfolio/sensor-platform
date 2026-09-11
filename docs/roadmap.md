@@ -57,20 +57,25 @@ The same formatter serves both paths; per-sensor downstream totals also match.
 
 Validation covers multi-radar recording, empty scans, independent sensor and
 whole-run resets, exact typed/text equivalence, malformed records, unsupported
-versions and truncated files failing before any replay output. Complete runs are
-buffered in memory. Full world/configuration regeneration, tracking replay and
+versions and truncated files failing before any replay output. Recording is now incremental; replay buffers the complete run for validation. Full world/configuration regeneration, tracking replay and
 incremental crash recovery are outside this milestone.
 
-## 5. Transport adapter and separate processes (next)
+## 5. Transport adapter and separate processes (implemented)
 
-Scope: introduce Kafka as an adapter over the implemented event contracts, for a concrete sensor-event producer and recorder/measurement consumer. Keep a local path for comparison. The world remains owned by one coordinator; initially sensors may stay colocated with it while downstream consumers run separately. Remote sensor execution is optional later and would consume authoritative snapshots, never own physics.
+Implemented: optional Kafka producer/viewer/recorder processes reuse the existing
+typed records. One retained topic per run and one partition preserve total order;
+viewer and recorder groups consume independently. Local execution remains
+Kafka-free. Incremental recording flushes each event; replay validates the full file.
 
-Exit criteria:
+Validation: the integration script publishes before consumers start, compares
+local/viewer/recorded/replayed streams, checks an orderly viewer restart after six
+committed events and recorder reconstruction. Unit tests cover codec round-trips,
+transport-independent handling, incremental writes and sequence rejection.
 
-- The same recorded fixture produces equivalent logical results through local and broker-backed paths.
-- Document partition keys, per-producer ordering, identity, retry/duplicate behavior, offset handling, backpressure, and restart recovery. Do not claim exactly-once behavior without evidence.
-- An integration test interrupts and restarts a consumer and demonstrates the chosen recovery semantics.
-- Broker/client and process lifecycle code do not enter domain targets.
+Delivery is at least once; a crash between output and offset commit can duplicate
+output. No rebalance/parallel group execution, producer resumption or atomic file
+checkpoint is claimed. Next: controlled crash/timeout/retention tests and durable
+consumer checkpoint handling before expanding to storage/analytics.
 
 ## 6. Historical storage and analytics
 
@@ -115,4 +120,4 @@ Exit criteria:
 - At least one measured bottleneck has a before/after comparison with unchanged correctness criteria.
 - Publish reproducible commands and findings, including limitations and tradeoffs.
 
-No future component needs a placeholder directory now. Continue with Kafka-backed transport and process separation in milestone 5, reusing the existing contracts; retain the shared core in sensor-sandbox.
+No future component needs a placeholder directory now. Continue with controlled failure/recovery and consumer checkpoint hardening before milestone 6; retain the shared core in sensor-sandbox.

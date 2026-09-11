@@ -8,7 +8,7 @@ The intended progression is a small headless simulation boundary, independent ra
 
 The executable advances one shared world and samples it with three independently scheduled radars at 1, 2 and 4 Hz. `MultiSensorRunner` owns one `SensorSystem` per radar and passes explicit simulation time to each. CMake adds the sibling checkout with sandbox app/tests disabled; the platform runner library links `sensor_core`. No raylib, copying, vendoring, or infrastructure is involved. Extraction into a third repository remains deferred.
 
-Configuration is a C++ `std::vector<SensorConfig>` in `src/main.cpp`: sensor ID, position, heading, existing range/FOV/cadence/noise/probability parameters, and a per-sensor seed. There is no configuration file parser. The sample uses two noise-free radars and a third with noise, dropped returns and false returns enabled.
+Configuration is a C++ `std::vector<SensorConfig>` in `src/EventTransport.cpp`: sensor ID, position, heading, existing range/FOV/cadence/noise/probability parameters, and a per-sensor seed. There is no configuration file parser. The sample uses two noise-free radars and a third with noise, dropped returns and false returns enabled.
 
 ## Build and run
 
@@ -36,7 +36,12 @@ stdout contain the same ordered typed records (apart from OS line endings).
 Recording replaces the specified file. Replay validates the complete file before
 output; it never reruns the simulation. The inspectable versioned text format,
 identity rules and limits are documented in [Event recording](docs/event-recording.md).
-The next milestone is Kafka-backed transport and process separation using these contracts.
+Kafka producer, consumer and incremental recorder processes are now available as an optional build. See [Kafka development](docs/kafka.md) for build/start commands, ordering and restart semantics.
+
+Local live recording now writes and flushes events as they arrive; it no longer
+buffers the complete run. Replay still validates the complete file before output.
+The optional topology is simulation producer -> one-partition Kafka run topic ->
+independent viewer and recorder groups. The existing local commands stay Kafka-free.
 
 Override the sibling location with `-DSENSOR_SANDBOX_SOURCE_DIR=/path/to/sensor-sandbox`. The build consumes that checkout's current sources; it does not pin a Git revision or modify its build directory.
 
