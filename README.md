@@ -43,6 +43,25 @@ buffers the complete run. Replay still validates the complete file before output
 The optional topology is simulation producer -> one-partition Kafka run topic ->
 independent viewer and recorder groups. The existing local commands stay Kafka-free.
 
+## Historical analytics
+
+Local or Kafka-produced recordings can now be exported to immutable per-run
+Parquet datasets and queried with DuckDB. Python tooling lives in `analytics/`;
+the C++ runtime and sensor_core retain no analytics dependency.
+
+```sh
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r analytics/requirements.txt
+.venv/Scripts/python.exe -m analytics export build/sample.events data --runtime build/Debug/sensor_platform.exe
+.venv/Scripts/python.exe -m analytics query data --sql analytics/sql/sensor_summary.sql
+```
+
+The dataset keeps separate event, scan and measurement tables, so empty scans
+remain visible. Identical retries are no-ops; conflicting event/run identities
+fail. The sample produces 10 scan rows and 11 measurement rows across three sensors.
+See [Historical analytics](docs/analytics.md) for schema, layout, duplicate rules,
+test commands and measured SQL results.
+
 Override the sibling location with `-DSENSOR_SANDBOX_SOURCE_DIR=/path/to/sensor-sandbox`. The build consumes that checkout's current sources; it does not pin a Git revision or modify its build directory.
 
 - [Architecture](docs/architecture.md): observed implementation, coupling, reuse options, and proposed boundaries.

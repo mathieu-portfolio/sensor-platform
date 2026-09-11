@@ -74,19 +74,26 @@ transport-independent handling, incremental writes and sequence rejection.
 
 Delivery is at least once; a crash between output and offset commit can duplicate
 output. No rebalance/parallel group execution, producer resumption or atomic file
-checkpoint is claimed. Next: controlled crash/timeout/retention tests and durable
-consumer checkpoint handling before expanding to storage/analytics.
+checkpoint is claimed. Follow-up: controlled crash/timeout/retention tests and
+durable consumer checkpoint handling alongside the historical analytics layer.
 
-## 6. Historical storage and analytics
+## 6. Historical storage and analytics (first slice implemented)
 
-Scope: persist versioned events and build one useful derived dataset, such as scan yield and track continuity by run/sensor/time window. Choose one storage approach from actual query and replay needs; add further tools only when needed.
+Python/DuckDB tooling ingests completed local or Kafka recordings into immutable
+per-run Parquet event, scan and measurement tables. Empty scans and lifecycle
+metadata remain queryable; evaluation truth stays excluded. Normalized event
+identities remove identical duplicates and reject conflicts. Identical whole-run
+re-imports are no-ops; partial runs never publish.
 
-Exit criteria:
+Six SQL analyses cover sensor yield/empty-scan rate, reset-aware cadence, run
+summary, acquisition-time buckets, event types and measurement distribution.
+The three-radar example reconciles to 15 events, 10 scans and 11 measurements.
+Tests also cover alternate fixtures, resets and multiple run IDs.
 
-- Re-ingesting a recording does not duplicate logical events.
-- Raw records retain provenance and support rebuilding derived tables.
-- A documented query reconciles totals with the fixture and distinguishes simulated drops, false returns, and transport failures.
-- A small reproducible analysis compares two runs or sensor configurations, with data-quality checks and explicit metric definitions.
+Next: broader multi-run data-quality and retention validation, then bounded
+continuous Parquet batches if workload requires them. Broker crash/checkpoint
+hardening remains separate follow-up work. No new database server or orchestrator
+is needed for this local historical pipeline.
 
 ## 7. Real-time processing and operational metrics
 
@@ -120,4 +127,4 @@ Exit criteria:
 - At least one measured bottleneck has a before/after comparison with unchanged correctness criteria.
 - Publish reproducible commands and findings, including limitations and tradeoffs.
 
-No future component needs a placeholder directory now. Continue with controlled failure/recovery and consumer checkpoint hardening before milestone 6; retain the shared core in sensor-sandbox.
+No future component needs a placeholder directory now. Continue with historical data-quality/retention validation and separate consumer checkpoint hardening; retain the shared core in sensor-sandbox.

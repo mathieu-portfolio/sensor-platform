@@ -27,3 +27,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+# Local analytics environment and generated datasets
+/.venv/
+/data/
+__pycache__/
+*.pyc

@@ -63,6 +63,26 @@ validated, but Docker startup was blocked by unavailable WSL virtualization.
 The broker integration ran against the same Kafka release directly on Java 21;
 container startup itself remains to be checked on a Docker-capable host.
 
+## Historical data layer
+
+Simulation events reach a local recording directly or through Kafka's recorder.
+The Python `analytics/` sink normalizes identical duplicates, reuses C++ replay
+validation, and materializes events/scans/measurements into per-run Parquet files.
+DuckDB writes these files and queries them through version-controlled SQL. No
+runtime/core dependencies change; direct Kafka-to-Parquet streaming is deferred.
+
+Each completed run is published as one immutable directory after all tables and
+a manifest are complete. Event identity drives duplicate/conflict detection;
+retrying an identical run changes nothing. Scan rows preserve zero detections,
+and event rows preserve lifecycle/reset/seed metadata. Measurements contain no
+evaluation truth. See [Historical analytics](analytics.md) for schema and commands.
+
+The representative run reconciles to 15 events, 10 scans and 11 measurements.
+Tests cover field precision, multiple runs/sensors/generations, empty/no scans,
+query correctness, duplicate/conflict behavior and malformed/corrupt data.
+Next: larger multi-run fixtures and historical data-quality/retention validation
+before continuous Parquet batching or additional services.
+
 ## First boundary implementation
 
 Implemented in sensor-sandbox commit `56ac040f32b9aa741c9f02266eb9b0ef06c9ab91` (`Establish headless sensor timing boundary`). Validation on Windows/MSVC 19.44: 49 headless tests passed with raylib discovery disabled; the interactive executable built, and all 54 app-enabled tests passed, including five audio tests. Validation used the existing pinned GoogleTest v1.15.2 source after the installed GoogleTest binaries crashed during discovery. The GUI was not manually exercised.
