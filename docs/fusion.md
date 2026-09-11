@@ -37,6 +37,47 @@ Live errors may leave a visible prefix; a missing final RUN_FINISHED snapshot me
 incomplete output. File/stdin fusion are tested for byte-identical results. No
 Kafka-facing behavior changed, so expensive broker integration was not rerun.
 
+## Multi-seed evaluation
+
+Evaluate one existing scenario over an inclusive range or comma-separated list:
+
+```sh
+python scripts/dev.py --build-dir build/consumer-verified evaluation demo build/fusion-seeds --scenario outage_noise --seed-range 40 42
+python scripts/dev.py --build-dir build/consumer-verified evaluation demo build/fusion-list --scenario outage_noise --seeds 42,40,41
+```
+
+Use a new output directory. `--scenario` is required for these options; `--seed`,
+`--seeds`, and `--seed-range` are mutually exclusive. Seeds must be integers in
+0..4294967292. Duplicate list entries and descending ranges fail. Execution and
+summary rows use ascending seed order. Existing single-seed `demo` behavior stays
+unchanged. Sampling/cadences are fixed by each scenario, so no new cadence option
+is introduced.
+
+The command reuses the existing generator, fusion executable and truth scorer.
+Each `seed-N/<scenario>/` retains its measurements, truth, scenario config and
+track output. `summary.json` (also printed to stdout) contains `per_seed` rows
+and `aggregate` mean/min/max for position RMSE, missed-target samples, false-track
+samples, unique false tracks and ID switches. It is written after all seeds
+succeed; a failed sweep retains partial evidence but no completed summary.
+
+Aggregates weight seeds equally: mean RMSE is the mean of per-seed RMSEs, not a
+pooled position RMSE. Null RMSEs (no matched targets) are excluded, with the
+`valid_seeds` count retained; an all-null metric has null mean/min/max. Output
+contains no wall-clock timestamps or absolute paths, preserving deterministic
+summary bytes for identical seeds/scenario/runtime in the same numeric environment.
+
+Representative default-setting `outage_noise` results:
+
+| Seed | Position RMSE | Missed samples | False-track samples | Unique false tracks | ID switches |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 40 | 0.8009 | 1 | 20 | 1 | 0 |
+| 41 | 0.7734 | 1 | 20 | 1 | 0 |
+| 42 | 0.7364 | 1 | 20 | 1 | 0 |
+
+RMSE mean/min/max: 0.7702 / 0.7364 / 0.8009. The initial miss is confirmation
+delay; the deliberately persistent false return explains the false-track counts.
+Focused tests: `python scripts/dev.py test evaluation -k SeedSweepTests`.
+
 ## Observation and association rules
 
 Current `Detection.estimatedPosition` is already world Cartesian X/Y, not local
