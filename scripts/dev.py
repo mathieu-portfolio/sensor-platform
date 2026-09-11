@@ -7,8 +7,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-CTEST_GROUPS = ("unit", "platform", "integration")
-PYTHON_GROUPS = {"analytics": "analytics/tests", "experiments": "experiments/tests", "workflow": "scripts/tests"}
+CTEST_GROUPS = ("unit", "platform", "integration", "fusion")
+PYTHON_GROUPS = {"analytics": "analytics/tests", "experiments": "experiments/tests", "workflow": "scripts/tests", "evaluation": "evaluation/tests"}
 
 
 def repo_path(value):
@@ -69,12 +69,16 @@ def commands(args):
         return [[runtime, "replay", args.path]]
     if args.command == "run":
         return [[runtime, "run", *extra]]
+    if args.command == "fuse":
+        return [[runtime, "fuse", *extra]]
     if args.command == "kafka":
         return [[str(binaries / ("sensor_platform_kafka.exe" if os.name == "nt" else "sensor_platform_kafka")), *extra]]
     if args.command == "analytics" and extra[:1] == ["export"] and not supplied(extra, "--runtime"):
         extra += ["--runtime", runtime]
     if args.command == "experiments" and extra[:1] == ["run"] and not supplied(extra, "--bin-dir"):
         extra += ["--bin-dir", str(binaries)]
+    if args.command == "evaluation" and extra[:1] == ["demo"] and not supplied(extra, "--runtime"):
+        extra += ["--runtime", runtime]
     return [[python, "-m", args.command, *extra]]
 
 
@@ -94,7 +98,8 @@ def parser():
     test.add_argument("extra", nargs=argparse.REMAINDER, help="CTest / unittest / validate_kafka.py arguments")
     for name, help_text in [("run", "run the local C++ sample"), ("record", "record a local run"),
                             ("replay", "validate/replay a recording"), ("analytics", "forward to python -m analytics"),
-                            ("experiments", "forward to python -m experiments"), ("kafka", "forward to the Kafka runtime; broker must already be running")]:
+                            ("experiments", "forward to python -m experiments"), ("fuse", "fuse a recording or live stdin (-)"),
+                            ("evaluation", "truth-separated fusion evaluation"), ("kafka", "forward to the Kafka runtime; broker must already be running")]:
         command = sub.add_parser(name, help=help_text)
         if name in ("record", "replay"):
             command.add_argument("path")

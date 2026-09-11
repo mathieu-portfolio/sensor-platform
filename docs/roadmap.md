@@ -105,16 +105,19 @@ Exit criteria:
 - Duplicate and delayed events have tested outcomes.
 - A controlled slow consumer produces observable backlog and recovery; simulation time is not confused with wall-clock processing latency.
 
-## 8. Measurement association and multi-sensor fusion experiments
+## 8. Measurement association and multi-sensor fusion experiments (baseline implemented)
 
-Scope: first replace truth-assisted association with a small measurement-based baseline, then compare independent tracks with a simple multi-sensor association/fusion experiment. Keep this separable from infrastructure work.
+Implemented in platform: world-space observations, deterministic distance-gated
+nearest-neighbour matching, simple velocity prediction and global track lifecycle.
+The core's older tracker is not reused; runtime fusion has no truth association.
+Recorded and live text inputs share one processor and explicit global-track output.
 
-Exit criteria:
-
-- Association cannot read truth IDs; evaluation can access ground truth separately.
-- Crossing, intermittent-contact, and false-return scenarios report identity switches, continuity, false tracks, and position error against a baseline.
-- Coordinate frames, acquisition-time alignment, uncertainty interpretation, and duplicate observation handling are explicit.
-- Results include cases where fusion worsens performance; no claim of calibrated covariance or realistic radar fidelity is made without a supporting model.
+Separate analytic fixtures evaluate overlap, asynchronous cadences, outages/noise,
+false returns and crossing. The crossing exposes two identity switches despite
+small position error; the persistent false return creates a false track. See
+[Fusion](fusion.md) for metrics and limitations. Next compare settings/seeds and
+sampling gaps before advancing the association model; covariance calibration,
+late-event buffering and durable fusion checkpoints remain deferred.
 
 ## 9. Controlled failure/load experiments and benchmarking (first slice implemented)
 

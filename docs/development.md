@@ -37,15 +37,17 @@ Other arguments are forwarded unchanged; for leading flags use e.g.
 
 | `test` group | Existing tests selected | Additional targeting |
 | --- | --- | --- |
-| `unit` (default) | Two C++ runner/event CTest executables | `-R events` or `-R multi_sensor` |
-| `platform` | All three platform CTest tests | `-N` lists without execution |
+| `unit` (default) | C++ runner/event/fusion CTest executables | `-R events` or `-R multi_sensor` |
+| `platform` | All four platform CTest tests | `-N` lists without execution |
+| `fusion` | C++ association/lifecycle tests | No broker required |
 | `integration` | Local CLI recording/output CTest only | No broker required |
 | `analytics` | Python Parquet/DuckDB unittest suite | `-k fields` |
 | `experiments` | Python metric/config/runtime unittest suite | `-k MetricTests` |
 | `workflow` | Developer CLI unittest suite | `-k filters` |
+| `evaluation` | Truth-separated fusion scenarios/metrics | `-k metric_definitions` |
 | `kafka` | Existing `tools/validate_kafka.py` | Explicit opt-in; running broker required |
 
-CTest labels are `unit`, `platform`, `integration`; the Python and Kafka groups
+CTest labels are `unit`, `platform`, `integration`, `fusion`; the Python and Kafka groups
 route to their existing runners, without duplicate CTest registration or a Python
 dependency in C++ configuration. A CTest filter matching no tests fails clearly.
 Python unittest uses its normal `-k` behavior (zero matches are reported, not failed).

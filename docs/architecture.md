@@ -32,7 +32,7 @@ Core `StreamEvent` values model run start/reset/finish, sensor start/reset and c
 
 `sensor_platform_recording` owns all text encoding, persistence validation and replay decoding. Live and replay paths pass the same typed events to the same output formatter. The versioned line format preserves every measurement field and float timestamp exactly. Replay loads and validates the complete recording before output and never runs the sensor simulation. A required final event catches line-boundary truncation. IncrementalRecording validates and flushes one event at a time; only replay retains a complete event vector.
 
-See [Event recording](event-recording.md) for the contract, file grammar and validation rules. Tests compare typed fields, observable text and per-sensor downstream totals, including empty scans and sensor/world resets. Tracking events and full scenario regeneration are deferred. Kafka is now an optional platform adapter over the same contracts; persistence remains owned by platform.
+See [Event recording](event-recording.md) for the contract, file grammar and validation rules. Tests compare typed fields, observable text and per-sensor downstream totals, including empty scans and sensor/world resets. Global-track output is now a separate downstream platform contract; full scenario regeneration remains deferred. Kafka is an optional platform adapter over the original measurement contracts; persistence remains owned by platform.
 
 ## Kafka process boundary
 
@@ -91,6 +91,19 @@ separate producer/consumer processes. Wall-clock metrics are sidecars, not domai
 event fields. Sensor outage gating lives in MultiSensorRunner; core scheduling
 and event contracts remain unchanged. DuckDB compares JSON experiment summaries,
 while normal received recordings still feed the Parquet historical pipeline.
+
+## Truth-free global fusion
+
+`sensor_platform_fusion` consumes only typed measurement/lifecycle events. The
+world-space observation adapter, distance-gated greedy association, alpha-beta
+updates and track lifecycle live in platform, without importing the core's older
+truth-assisted tracker. JSON Lines snapshots expose global IDs, contributors and
+measurement associations. File and stdin paths share the processor; Kafka can
+remain unchanged and supply recordings or a complete viewer stream.
+
+Offline `evaluation/` keeps analytic truth fixtures separate from fusion inputs;
+DuckDB track inspection is truth-free. [Fusion](fusion.md) records configuration,
+identity rules, recovery limits and measured crossing/false-return failures.
 
 ## First boundary implementation
 

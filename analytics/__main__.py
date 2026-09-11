@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from .dataset import export_run, open_dataset, SQL_DIR
+from .track_events import open_tracks
 
 
 def main():
@@ -18,12 +19,15 @@ def main():
     query = commands.add_parser("query", help="query immutable Parquet partitions using DuckDB")
     query.add_argument("dataset", type=Path)
     query.add_argument("--sql", type=Path, default=SQL_DIR / "sensor_summary.sql")
+    tracks = commands.add_parser("tracks", help="query completed global-track JSON Lines")
+    tracks.add_argument("dataset", type=Path)
+    tracks.add_argument("--sql", type=Path, default=SQL_DIR / "fusion/summary.sql")
     args = parser.parse_args()
     try:
         if args.command == "export":
             print(json.dumps(export_run(args.recording, args.dataset, args.runtime), sort_keys=True))
         else:
-            with open_dataset(args.dataset) as connection:
+            with (open_tracks(args.dataset) if args.command == "tracks" else open_dataset(args.dataset)) as connection:
                 result = connection.execute(args.sql.read_text(encoding="utf-8"))
                 writer = csv.writer(sys.stdout, lineterminator="\n")
                 writer.writerow(column[0] for column in result.description)

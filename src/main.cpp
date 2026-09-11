@@ -8,10 +8,12 @@
 #include "EventTransport.hpp"
 #include "EventRecording.hpp"
 #include "Experiment.hpp"
+#include "Fusion.hpp"
 
 int main(int argc, char** argv) {
     try {
         const std::string command = argc > 1 ? argv[1] : "run";
+        if (command == "fuse") return sensor_platform::fusionCommand(argc, argv);
         if (command == "replay") {
             if (argc != 3) throw std::invalid_argument("Usage: sensor_platform replay <path>");
             std::ifstream input(argv[2], std::ios::binary);

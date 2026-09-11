@@ -78,6 +78,22 @@ Add `--transport kafka` with a running local broker and Kafka-enabled binaries.
 See [Experiments and performance](docs/experiments.md) for configuration, metric
 definitions, actual measurements, Kafka setup and test commands.
 
+## Global tracking and fusion
+
+The platform associates world-space radar observations into global tracks using
+deterministic distance-gated nearest neighbours, simple velocity prediction, and
+time-based confirmation/coasting/expiry. Multiple sensors contribute to one track.
+Runtime inputs and outputs contain no evaluation truth.
+
+```sh
+python scripts/dev.py fuse build/sample.events --output build/tracks.jsonl
+python scripts/dev.py analytics tracks build/tracks.jsonl
+python scripts/dev.py evaluation demo build/fusion-evaluation
+```
+
+See [Fusion](docs/fusion.md) for the JSON Lines contract, streaming input, separate
+evaluation metrics and crossing/false-return limitations of this baseline.
+
 Override the sibling location with `-DSENSOR_SANDBOX_SOURCE_DIR=/path/to/sensor-sandbox`. The build consumes that checkout's current sources; it does not pin a Git revision or modify its build directory.
 
 - [Architecture](docs/architecture.md): observed implementation, coupling, reuse options, and proposed boundaries.
