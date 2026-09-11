@@ -2,7 +2,19 @@
 
 ## Status and evidence
 
-This document separates observations from proposals. radar-platform itself remains documentation-only; the first boundary implementation now lives in sensor-sandbox as described below. The original inspection sections describe the baseline revision, not the updated build/API.
+This document separates observations from proposals. sensor-platform now builds a headless C++ consumer of the sibling sensor-sandbox core. Earlier implementation sections record historical milestones; the original inspection sections describe the baseline revision, not the updated build/API.
+
+## Reusable core and platform consumer
+
+`sensor_core` now lives in sensor-sandbox and contains presentation-independent world/motion, sensors/measurements, evaluation, tracking, scenarios, timing and instrumentation. The former presentation library is named `sensor_sandbox_presentation`. Sandbox-specific `SensorSimulation` orchestration moved to `src/app/simulation/` and builds as `sensor_sandbox_runtime`; its frame views and echo history are outside the core. Domain tests link the core directly, while the separate runtime regression suite remains runnable without raylib.
+
+sensor-platform uses CMake `add_subdirectory` on `../sensor-sandbox` (overridable with `SENSOR_SANDBOX_SOURCE_DIR`) and links `sensor_platform` only to `sensor_core`. Sandbox app/tests are disabled in this embedded build. No sources are copied, vendored, or merged; both checkouts remain independent Git repositories. Consumption uses the current sibling working tree, not a pinned or installed package. Extraction into a third repository remains deferred.
+
+The executable constructs one straight-moving entity and one 2 Hz sensor, advances world motion once per 0.25-second step, and passes explicit elapsed seconds to the scanner. It prints three scans at 0, 0.5 and 1 second. A CTest fixture checks complete output, including positions and the absence of intermediate scans.
+
+Remaining coupling: scenario definitions share tuning that includes audio volume; entities retain scenario path state; tracks retain history and truth identity. The public include root is still `src`, although core headers do not include presentation headers. Procedural transit orchestration remains in the sandbox runtime. These are follow-up concerns, not reasons to import that runtime into platform.
+
+Next: prove independent per-sensor schedules against one authoritative world using one existing `SensorSystem` per sensor, with cadence/reset/order-independence tests. Tracking association cleanup can proceed separately before platform adds tracking.
 
 ## First boundary implementation
 
