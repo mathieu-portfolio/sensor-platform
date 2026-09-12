@@ -6,6 +6,12 @@ import shlex
 import subprocess
 import sys
 
+# Support both direct script execution and import by focused workflow tests.
+if __name__ == "__main__" and not __package__:
+    from procedural import add_arguments, from_arguments
+else:
+    from scripts.procedural import add_arguments, from_arguments
+
 ROOT = Path(__file__).resolve().parents[1]
 CTEST_GROUPS = ("unit", "platform", "integration", "fusion")
 PYTHON_GROUPS = {"analytics": "analytics/tests", "experiments": "experiments/tests", "workflow": "scripts/tests", "evaluation": "evaluation/tests"}
@@ -70,7 +76,8 @@ def commands(args):
         return [[viewer, *(["--help"] if args.viewer_help else []), *extra]]
     if args.command == "demo":
         viewer = str(binaries / ("sensor_platform_viewer.exe" if os.name == "nt" else "sensor_platform_viewer"))
-        return [[python, "-m", "scripts.demo", "--runtime", runtime, "--viewer", viewer, "--output", args.output]]
+        return [[python, "-m", "scripts.demo", "--runtime", runtime, "--viewer", viewer,
+                 *from_arguments(args).arguments(), "--output", args.output]]
     if args.command == "replay":
         return [[runtime, "replay", args.path]]
     if args.command == "run":
@@ -115,6 +122,7 @@ def parser():
             command.add_argument("path")
         if name == "demo":
             command.add_argument("--output", default="demo/results", help="dedicated demo results directory")
+            add_arguments(command)
         elif name != "replay":
             command.add_argument("extra", nargs=argparse.REMAINDER)
     return result
@@ -133,6 +141,9 @@ def main(argv=None):
                 subprocess.run(command, cwd=ROOT, env=env, check=True)
     except subprocess.CalledProcessError as error:
         return error.returncode
+    except ValueError as error:
+        print(f"dev: {error}", file=sys.stderr)
+        return 1
     except OSError as error:
         print(f"dev: {error}. Build first or check the selected tool/build paths.", file=sys.stderr)
         return 1

@@ -1,6 +1,7 @@
 #include <charconv>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <iostream>
@@ -9,6 +10,7 @@
 #include "EventRecording.hpp"
 #include "Experiment.hpp"
 #include "Fusion.hpp"
+#include "ProceduralScenario.hpp"
 
 int main(int argc, char** argv) {
     try {
@@ -27,6 +29,7 @@ int main(int argc, char** argv) {
         sensor_sandbox::RunId runId = 1;
         std::string recordPath;
         std::string experiment;
+        std::string proceduralPath, layoutOutput;
         sensor_platform::ObservationOptions observationOptions;
         bool hasRunId = false;
         int sampleSeconds = 1;
@@ -49,6 +52,8 @@ int main(int argc, char** argv) {
                 hasSampleSeconds = true;
             }
             else if (option == "--experiment" && command == "run") experiment = value;
+            else if (option == "--procedural" && command == "run" && proceduralPath.empty() && !value.empty()) proceduralPath = value;
+            else if (option == "--layout-output" && command == "run" && layoutOutput.empty() && !value.empty()) layoutOutput = value;
             else if (option == "--metrics") observationOptions.metrics = value;
             else if (option == "--delay-ms" && command == "observe") observationOptions.delayMs = nonnegative();
             else if (option == "--pause-after" && command == "observe") observationOptions.pauseAfter = nonnegative();
@@ -63,6 +68,23 @@ int main(int argc, char** argv) {
         }
         if (hasSampleSeconds && !experiment.empty())
             throw std::invalid_argument("--sample-seconds cannot be combined with --experiment");
+        if (!proceduralPath.empty() && (hasSampleSeconds || !experiment.empty()))
+            throw std::invalid_argument("--procedural cannot be combined with --sample-seconds or --experiment");
+        if (!layoutOutput.empty() && proceduralPath.empty())
+            throw std::invalid_argument("--layout-output requires --procedural");
+        std::optional<sensor_platform::GeneratedScenario> generated;
+        if (!proceduralPath.empty()) {
+            std::ifstream input(proceduralPath);
+            if (!input) throw std::runtime_error("Cannot open procedural configuration: " + proceduralPath);
+            generated = sensor_platform::generateScenario(sensor_platform::readProceduralConfig(input));
+            if (!layoutOutput.empty()) {
+                std::ofstream output(layoutOutput);
+                if (!output) throw std::runtime_error("Cannot create sensor layout: " + layoutOutput);
+                sensor_platform::writeScenarioLayout(output, *generated);
+                output.close();
+                if (!output) throw std::runtime_error("Cannot close sensor layout: " + layoutOutput);
+            }
+        }
         sensor_platform::Observation observation(observationOptions);
         sensor_platform::IncrementalRecording live(std::cout);
         if (command == "observe") {
@@ -83,7 +105,8 @@ int main(int argc, char** argv) {
                 observation.mark("produced", event.identity.streamSequence);
                 sink(event);
             };
-            if (experiment.empty()) sensor_platform::runSample(runId, measured, sampleSeconds);
+            if (generated) sensor_platform::runProcedural(runId, *generated, measured);
+            else if (experiment.empty()) sensor_platform::runSample(runId, measured, sampleSeconds);
             else sensor_platform::runExperiment(runId, experiment, measured);
         };
         if (!recordPath.empty()) {

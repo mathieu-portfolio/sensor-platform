@@ -5,14 +5,15 @@ import json
 import os
 from pathlib import Path
 import shlex
-import shutil
 import subprocess
 import sys
 import time
+from dataclasses import asdict
+from .procedural import ProceduralConfig, add_arguments, from_arguments
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN_ID = 42
-SCENARIO = "default-three-radar-sample"
+RUN_ID = 43
+SCENARIO = "procedural-v1"
 
 
 def write_json(path, value):
@@ -25,6 +26,9 @@ def query_summary(connection, sql, destination):
     result = connection.execute(sql.read_text(encoding="utf-8"))
     columns = [column[0] for column in result.description]
     rows = result.fetchall()
+    # A previous demo version can coexist in the immutable dataset. Reports
+    # describe this recording, not every historical run in the output directory.
+    rows = [row for row in rows if row[columns.index("run_id")] == RUN_ID]
     with destination.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
         writer.writerow(columns)
@@ -38,10 +42,12 @@ def viewer_command(arguments):
     return shlex.join(arguments)
 
 
-def run_demo(runtime, output, viewer):
+def run_demo(runtime, output, viewer, config=None):
+    config = config if config is not None else ProceduralConfig()
     runtime, output, viewer = Path(runtime).resolve(), Path(output).resolve(), Path(viewer).resolve()
     output.mkdir(parents=True, exist_ok=True)
     summary = dict(schema_version=1, status="running", run_id=RUN_ID, scenario=SCENARIO,
+                   procedural_config=asdict(config),
                    stage="preflight", stage_seconds={})
     report_path = output / "summary.json"
     write_json(report_path, summary)
@@ -75,8 +81,11 @@ def run_demo(runtime, output, viewer):
                 subprocess.run([str(runtime), *map(str, arguments)], cwd=ROOT, env=env,
                                stdout=stdout, stderr=log, check=True, timeout=120)
 
+            configuration = output / "scenario.config"
+            configuration.write_text(config.text(), encoding="utf-8")
             stage("record", lambda: execute(["run", "--run-id", str(RUN_ID), "--record", recording,
-                                               "--sample-seconds", "20", "--metrics", metrics]))
+                                               "--procedural", configuration,
+                                               "--layout-output", output / "sensors.layout", "--metrics", metrics]))
             with replay.open("wb") as stream:
                 stage("replay", lambda: execute(["replay", recording], stdout=stream))
             original_events, _, normalized_hash, _ = read_unique(recording)
@@ -119,7 +128,6 @@ def run_demo(runtime, output, viewer):
         stage("analytics", analytics)
 
         def prepare_viewer():
-            shutil.copyfile(ROOT / "docs/sample.sensors.layout", output / "sensors.layout")
             arguments = [str(viewer), str(recording), "--layout", str(output / "sensors.layout")]
             summary["viewer"] = dict(available=viewer.is_file(), argv=arguments, truth="hidden",
                                      layout="sensors.layout", recording="recording.events")
@@ -155,9 +163,10 @@ def main(argv=None):
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--viewer", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "demo/results")
+    add_arguments(parser)
     args = parser.parse_args(argv)
     try:
-        summary = run_demo(args.runtime, args.output, args.viewer)
+        summary = run_demo(args.runtime, args.output, args.viewer, from_arguments(args))
         print(json.dumps(dict(status=summary["status"], run_id=summary["run_id"], counts=summary["counts"],
                               active_tracks=summary["fusion"]["final_active_tracks"],
                               ingestion=summary["ingestion"]["status"], quality=summary["ingestion"]["quality_status"],

@@ -1,4 +1,5 @@
 #include "MultiSensorRunner.hpp"
+#include "ProceduralScenario.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -47,6 +48,7 @@ std::vector<sensor_sandbox::SensorScan> MultiSensorRunner::advanceTo(float simul
     }
     if (simulationTimeSeconds > timeSeconds_) {
         sensor_sandbox::EntityMotionSystem{}.update(world_, simulationTimeSeconds - timeSeconds_);
+        updateProceduralMotion(world_, simulationTimeSeconds);
     }
     timeSeconds_ = simulationTimeSeconds;
     std::vector<sensor_sandbox::SensorScan> scans;

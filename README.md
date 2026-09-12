@@ -33,7 +33,7 @@ For any configured build directory, the entry point is:
 python scripts/dev.py --build-dir <build> demo
 ```
 
-The demo records the seeded three-radar sample, verifies replay equivalence, runs fusion, ingests through the quality gate, executes existing SQL summaries and prepares viewer inputs. Results go to **`demo/results/`**: start with `summary.json`, the CSV summaries and `viewer.md`. Repeating the command produces the same recording and returns ingestion status `unchanged`.
+The demo procedurally generates four targets and three radars, verifies replay equivalence, runs fusion, ingests through the quality gate, executes existing SQL summaries and prepares a matching viewer layout. Target and sensor-layout seeds are independent; `demo --help` exposes seeds, duration and counts. Results go to **`demo/results/`**: start with `summary.json`, the CSV summaries and `viewer.md`. Repeating the same configuration produces the same recording and returns ingestion status `unchanged`. [Generation rules and configuration API](docs/procedural-scenarios.md).
 
 Kafka and raylib are optional; neither is required for the demo. To open the recording graphically, [build the viewer](docs/viewer.md) and use the command in `demo/results/viewer.md`. Dependencies and builds are explicit, never implicit side effects of running the demo. [Full artifact list and repeatability](docs/demo.md) · [Developer commands](docs/development.md)
 
@@ -72,7 +72,7 @@ These are recorded development results, not capacity guarantees. Transport runs 
 
 | Workload | Observed result | Evidence |
 | --- | --- | --- |
-| Three-radar demo, 1 simulated second | 15 events, 10 scans, 11 measurements; 2 final tracks; quality passed | [Demo](docs/demo.md) |
+| Procedural demo, 4 targets / 3 radars / 20 seconds | 148 events, 143 scans, 522 measurements; 4 final tracks; quality passed | [Demo](docs/demo.md) |
 | Fusion, three sensors at 2/4/8 Hz | Position RMSE 0.0080; 1 missed sample of 65; 0 ID switches | [Evaluation](docs/fusion.md) |
 | Fusion, sparse close crossing | Position RMSE 0.0372 but 2 ID switches | [Known association limit](docs/fusion.md) |
 | Local load, 16 sensors at 40 Hz | 1,314 events; 653.67 consumed/s; p95 1.30 ms; peak backlog 14 | [Load comparison](docs/experiments.md) |
