@@ -48,10 +48,13 @@ The sidebar exposes scenario seed **2026**, layout seed **73**, duration **20 s*
 **4** targets and **3** sensors by default. Click a value to replace it, type digits,
 and use Tab/Shift+Tab to move between fields. Backspace edits; Ctrl+A selects the
 whole value. Enter or Escape leaves the field. Playback keyboard shortcuts are
-inactive while editing; Escape closes the window when no field is focused.
+inactive while editing. F11 toggles fullscreen even while editing; Escape leaves
+fullscreen first, otherwise it closes the window when no field is focused.
 
 Click **Generate / Run** to validate the inputs and prepare a complete recording.
-Success replaces playback, resets speed to 1x and fits the generated sensor layout.
+Success replaces all playback state and histories, starts at time zero at 1x,
+and fits the generated sensor layout with zoom and pan reset. Preparation time is
+excluded from playback time. Configuration values remain unchanged in the controls.
 Invalid values show a message without replacing the current recording. The same
 controls remain available when a file was opened. Editing values alone does not
 change playback, and the fields describe the next generated run, not metadata
@@ -85,7 +88,9 @@ measurement positions. Without a layout the geometry count stays at zero.
   Large sensor lists show only the rows that fit; the total includes all sensors.
 - Space pauses/resumes; Left/Right steps backward/forward one event and pauses; R restarts playback.
   +/- changes speed (default 1x), mouse wheel zooms, left drag pans and F fits.
-  Escape closes. Completion holds the final frame; there is no simulation update
+  F11 toggles fullscreen, restoring windowed size, position and maximized state.
+  Escape leaves fullscreen or closes the window when no field is focused.
+  Completion holds the final frame; there is no simulation update
   or additional fusion prediction between recorded events.
 
 Playback preserves source order and relative acquisition times. Equal-time events

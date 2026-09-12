@@ -32,6 +32,28 @@ struct View {
                 static_cast<float>(-(py-y)*scale() + GetScreenHeight()*0.5 + pan.y)};
     }
 };
+struct WindowState {
+    int width{1200}, height{800};
+    Vector2 position{};
+    bool maximized{};
+    void toggleFullscreen() {
+        if (IsWindowFullscreen()) {
+            ToggleFullscreen();
+            SetWindowSize(width, height);
+            SetWindowPosition(static_cast<int>(position.x), static_cast<int>(position.y));
+            if (maximized) MaximizeWindow();
+        } else {
+            maximized = IsWindowMaximized();
+            if (maximized) RestoreWindow();
+            width = GetScreenWidth();
+            height = GetScreenHeight();
+            position = GetWindowPosition();
+            const int monitor = GetCurrentMonitor();
+            SetWindowSize(GetMonitorWidth(monitor), GetMonitorHeight(monitor));
+            ToggleFullscreen();
+        }
+    }
+};
 void label(const std::string& text, int x, int y, int size = 18, Color color = ink) {
     DrawText(text.c_str(), x, y, size, color);
 }
@@ -256,13 +278,25 @@ int main(int argc, char** argv) {
         InitWindow(1200, 800, "Sensor Platform | Event-driven recording viewer");
         if (!IsWindowReady()) throw std::runtime_error("Cannot initialize viewer window");
         SetWindowMinSize(1000, 700);
-        SetExitKey(KEY_NULL); // Escape first leaves an input, then closes the window.
+        SetExitKey(KEY_NULL); // Handle fullscreen and field focus before closing.
         SetTargetFPS(60);
+        WindowState window;
         bool paused = false;
         double speed = 1.;
+        double lastTick = GetTime();
         int frames = 0;
         while (!WindowShouldClose()) {
+            const double now = GetTime();
+            double elapsed = now - lastTick;
+            lastTick = now;
+            const bool leaveFullscreen = IsKeyPressed(KEY_ESCAPE) && IsWindowFullscreen();
+            if (leaveFullscreen || IsKeyPressed(KEY_F11)) {
+                window.toggleFullscreen();
+                lastTick = GetTime();
+                elapsed = 0;
+            }
             const bool wasEditing = controls.focused >= 0;
+            bool regenerated = false;
             if (controls.update()) {
                 try {
                     const auto config = controls.fields.config();
@@ -275,6 +309,7 @@ int main(int argc, char** argv) {
                     view = nextView;
                     paused = false;
                     speed = 1;
+                    regenerated = true;
                     controls.error.clear();
                     std::cout << "Generated procedural recording: scenario seed=" << config.scenarioSeed
                               << ", layout seed=" << config.layoutSeed << ", duration=" << config.durationSeconds
@@ -284,9 +319,12 @@ int main(int argc, char** argv) {
                     controls.error = error.what();
                     std::cerr << "Generate / Run: " << error.what() << '\n';
                 }
+                // Preparation is synchronous; never charge its duration to playback.
+                lastTick = GetTime();
+                elapsed = 0;
             }
-            if (!wasEditing && controls.focused < 0) {
-                if (IsKeyPressed(KEY_ESCAPE)) break;
+            if (!wasEditing && controls.focused < 0 && !regenerated) {
+                if (IsKeyPressed(KEY_ESCAPE) && !leaveFullscreen) break;
                 if (IsKeyPressed(KEY_SPACE)) paused = !paused;
                 if (playback && IsKeyPressed(KEY_R)) playback->restart();
                 if (playback && IsKeyPressed(KEY_RIGHT)) { paused = true; playback->step(); }
@@ -295,13 +333,13 @@ int main(int argc, char** argv) {
                 if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) speed = std::max(.0625,speed/2);
                 if (IsKeyPressed(KEY_F)) { view.pan = {}; view.zoom = 1; }
             }
-            if (GetMouseX() < GetScreenWidth()-310) {
+            if (!regenerated && GetMouseX() < GetScreenWidth()-310) {
                 view.zoom = std::clamp(view.zoom*std::pow(1.15f,GetMouseWheelMove()), .1f,20.f);
                 if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
                     const auto delta = GetMouseDelta(); view.pan.x += delta.x; view.pan.y += delta.y;
                 }
             }
-            if (playback && !paused) playback->advance(GetFrameTime()*speed);
+            if (playback && !paused) playback->advance(elapsed*speed);
             BeginDrawing();
             draw(playback,layout,view,paused,speed);
             controls.draw();
