@@ -35,6 +35,13 @@ void validate(const ProceduralConfig& config) {
         config.targetCount < 1 || config.targetCount > 12 ||
         config.sensorCount < 1 || config.sensorCount > 8)
         throw std::invalid_argument("Procedural duration must be 4..120 seconds, targets 1..12, sensors 1..8");
+    for (const auto& parameter : proceduralParameters) {
+        const float value = config.*(parameter.member);
+        if (!std::isfinite(value) || value < parameter.minimum || value > parameter.maximum)
+            throw std::invalid_argument(std::string(parameter.label) + " is outside its allowed range");
+    }
+    if (config.speedMin > config.speedMax)
+        throw std::invalid_argument("Min speed must not exceed max speed");
 }
 
 void positionAt(Entity& entity, float time) {
@@ -72,7 +79,8 @@ ProceduralConfig readProceduralConfig(std::istream& input) {
     std::string header;
     std::getline(input, header);
     if (!header.empty() && header.back() == '\r') header.pop_back();
-    if (header != "SENSOR_PROCEDURAL 1") throw std::invalid_argument("Expected SENSOR_PROCEDURAL 1 header");
+    if (header != "SENSOR_PROCEDURAL 1" && header != "SENSOR_PROCEDURAL 2")
+        throw std::invalid_argument("Expected SENSOR_PROCEDURAL 1 or 2 header");
     auto number = [&]() {
         std::string token;
         std::uint32_t value{};
@@ -90,6 +98,15 @@ ProceduralConfig readProceduralConfig(std::istream& input) {
     config.durationSeconds = static_cast<int>(duration);
     config.targetCount = static_cast<int>(targets);
     config.sensorCount = static_cast<int>(sensors);
+    if (header == "SENSOR_PROCEDURAL 2") for (const auto& parameter : proceduralParameters) {
+        std::string token;
+        float value{};
+        if (!(input >> token)) throw std::invalid_argument("Missing procedural parameter");
+        const auto parsed = std::from_chars(token.data(), token.data()+token.size(), value);
+        if (parsed.ec != std::errc{} || parsed.ptr != token.data()+token.size())
+            throw std::invalid_argument("Expected numeric procedural parameter");
+        config.*(parameter.member) = value;
+    }
     std::string extra;
     if (input >> extra || input.bad()) throw std::invalid_argument("Unexpected procedural configuration data");
     validate(config);
@@ -101,13 +118,14 @@ GeneratedScenario generateScenario(const ProceduralConfig& config) {
     GeneratedScenario result{config, {}, {}};
     SensorScenario paths;
     paths.seed = config.scenarioSeed;
-    paths.spawn.spawnRadius = 150;
+    paths.spawn.spawnRadius = 150 * config.spawnSpread;
     paths.spawn.passOffsetRadius = 25;
-    paths.spawn.speed = {280.0f / config.durationSeconds, 320.0f / config.durationSeconds};
-    paths.spawn.amplitude = {12, 24};
-    paths.spawn.frequencyHz = {1.0f / config.durationSeconds, 1.5f / config.durationSeconds};
+    paths.spawn.speed = {config.speedMin * 20 / config.durationSeconds, config.speedMax * 20 / config.durationSeconds};
+    paths.spawn.amplitude = {12 * config.maneuver, 24 * config.maneuver};
+    paths.spawn.frequencyHz = {std::max(.25f, config.maneuver) / config.durationSeconds,
+                              1.5f * std::max(.25f, config.maneuver) / config.durationSeconds};
     paths.spawn.burstTimeSeconds = {0.45f * config.durationSeconds, 0.55f * config.durationSeconds};
-    paths.spawn.burstMultiplier = {1.3f, 1.5f};
+    paths.spawn.burstMultiplier = {1 + .3f * config.maneuver, 1 + .5f * config.maneuver};
     // Rotate a balanced motion mix with the seed, rather than accidentally
     // generating four identical behaviors in the curated four-target case.
     const ScenarioPathMotion modes[]{ScenarioPathMotion::Linear, ScenarioPathMotion::Arc,
@@ -127,6 +145,15 @@ GeneratedScenario generateScenario(const ProceduralConfig& config) {
         };
         path.start = rotate(path.start);
         path.direction = rotate(path.direction);
+        // Low interaction turns approaches into dispersed, roughly tangential
+        // routes. This uses only the target seed, never sensor-network randomness.
+        const float divergence = (1 - config.convergence) * pi * .5f *
+            (unit(config.scenarioSeed, id, 11) < .5f ? -1 : 1);
+        if (divergence != 0) {
+            const auto direction = path.direction;
+            path.direction = {direction.x * std::cos(divergence) - direction.y * std::sin(divergence),
+                              direction.x * std::sin(divergence) + direction.y * std::cos(divergence)};
+        }
         Entity entity;
         entity.id = id;
         entity.label = "Procedural target " + std::to_string(id);
@@ -146,20 +173,31 @@ GeneratedScenario generateScenario(const ProceduralConfig& config) {
     }
     const float rotation = 2 * pi * unit(config.layoutSeed, 0, 1);
     const int rateOffset = static_cast<int>(mix(config.layoutSeed) % 3);
+    // Bound the first half of every possible path for this target configuration,
+    // without consulting target seeds/counts. Convexity makes endpoint distances
+    // sufficient for the forward-distance/lateral-amplitude rectangle.
+    const float spawnRadius = paths.spawn.spawnRadius;
+    const float amplitude = 24 * config.maneuver;
+    const float approach = std::atan2(25.0f, spawnRadius) + (1-config.convergence)*pi*.5f;
+    const float halfDistance = config.speedMax * (10 + .5f * config.maneuver);
+    const float lateralBound = 2 * amplitude * spawnRadius * std::min(1.0f, approach) + amplitude*amplitude;
+    const float observationDisk = std::sqrt(std::max(spawnRadius*spawnRadius,
+        spawnRadius*spawnRadius + halfDistance*halfDistance -
+        2*spawnRadius*halfDistance*std::cos(approach)) + lateralBound) + 2;
     for (int i = 0; i < config.sensorCount; ++i) {
         SensorConfig sensor;
         sensor.id = i + 1;
         const float angle = rotation + 2 * pi * (i + 0.15f * (unit(config.layoutSeed, i, 2) - 0.5f)) / config.sensorCount;
-        const float radius = 55 + 25 * unit(config.layoutSeed, i, 3);
+        const float radius = (55 + 25 * unit(config.layoutSeed, i, 3)) * config.layoutSpread;
         sensor.position = {radius * std::cos(angle), radius * std::sin(angle)};
-        // Every radar covers the radius-170 observation disk independently of
-        // target seed/count. Targets start inside it and converge through it.
-        sensor.definition.range = radius + 170 + 20 * unit(config.layoutSeed, i, 4);
+        // A coverage floor preserves useful observation even for dispersed paths.
+        sensor.definition.range = std::max(radius + observationDisk,
+            (radius + 170 + 20 * unit(config.layoutSeed, i, 4)) * config.coverage);
         const int quality = (i + rateOffset) % 3;
         sensor.definition.refreshRateHz = static_cast<float>(1 << quality);
-        sensor.definition.rangeNoise = 0.3f + 0.65f * quality + 0.3f * unit(config.layoutSeed, i, 5);
-        sensor.definition.detectionProbability = 0.98f - 0.07f * quality;
-        sensor.definition.falsePositiveRateHz = 0.05f + 0.1f * quality;
+        sensor.definition.rangeNoise = (0.3f + 0.65f * quality + 0.3f * unit(config.layoutSeed, i, 5)) * config.noise;
+        sensor.definition.detectionProbability = (0.98f - 0.07f * quality) * config.reliability;
+        sensor.definition.falsePositiveRateHz = (0.05f + 0.1f * quality) * config.clutter;
         sensor.seed = mix(config.layoutSeed ^ (static_cast<std::uint32_t>(i + 1) * 0x9e3779b9U));
         result.sensors.push_back(sensor);
     }

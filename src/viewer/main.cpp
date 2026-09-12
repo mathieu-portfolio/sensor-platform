@@ -73,17 +73,29 @@ View fit(const std::vector<sensor_sandbox::StreamEvent>& events, const std::vect
 
 struct ScenarioControls {
     ProceduralFields fields;
+    int page{};
     int focused{-1};
     bool replaceSelection{};
     std::string error;
     Rectangle field(int index) const {
-        return {static_cast<float>(GetScreenWidth()-168), 124.0f+28*index, 152, 24};
+        return {static_cast<float>(GetScreenWidth()-138), 150.0f+28*index, 122, 24};
     }
-    Rectangle button() const { return {static_cast<float>(GetScreenWidth()-294), 268, 278, 30}; }
+    Rectangle tab(int index) const {
+        return {static_cast<float>(GetScreenWidth()-294+94*index), 120, 90, 24};
+    }
+    std::string& value(int index) {
+        return page == 0 ? fields.values[index] : fields.parameters[(page-1)*5+index];
+    }
+    const std::string& value(int index) const {
+        return page == 0 ? fields.values[index] : fields.parameters[(page-1)*5+index];
+    }
+    Rectangle button() const { return {static_cast<float>(GetScreenWidth()-294), 294, 278, 30}; }
     bool update() {
         bool run = false;
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             focused = -1;
+            for (int i = 0; i < 3; ++i)
+                if (CheckCollisionPointRec(GetMousePosition(), tab(i))) page = i;
             for (int i = 0; i < 5; ++i)
                 if (CheckCollisionPointRec(GetMousePosition(), field(i))) focused = i;
             replaceSelection = focused >= 0;
@@ -94,11 +106,11 @@ struct ScenarioControls {
                 focused = (focused + (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? 4 : 1)) % 5;
                 replaceSelection = true;
             }
-            auto& value = fields.values[focused];
+            auto& value = this->value(focused);
             if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_A))
                 replaceSelection = true;
             for (int character = GetCharPressed(); character; character = GetCharPressed()) {
-                if (character < '0' || character > '9') continue;
+                if ((character < '0' || character > '9') && !(page > 0 && character == '.')) continue;
                 if (replaceSelection) value.clear();
                 replaceSelection = false;
                 if (value.size() < 10) value += static_cast<char>(character);
@@ -119,29 +131,39 @@ struct ScenarioControls {
     void draw() const {
         const int side = GetScreenWidth()-310;
         label("PROCEDURAL SCENARIO", side+16, 96, 17);
+        const char* tabs[]{"Run", "Targets", "Sensors"};
+        for (int i = 0; i < 3; ++i) {
+            DrawRectangleRec(tab(i), page == i ? Color{33,96,122,255} : background);
+            label(tabs[i], static_cast<int>(tab(i).x)+12, 125, 14, page == i ? ink : muted);
+        }
         const char* names[]{"Scenario seed", "Layout seed", "Duration (s)", "Targets", "Sensors"};
         for (int i = 0; i < 5; ++i) {
             const auto box = field(i);
-            label(names[i], side+16, static_cast<int>(box.y)+5, 14, muted);
+            const auto name = page == 0 ? names[i] : proceduralParameters[(page-1)*5+i].label;
+            label(name, side+16, static_cast<int>(box.y)+5, 14, muted);
             DrawRectangleRec(box, focused == i && replaceSelection ? Color{35, 66, 87, 255} : background);
             DrawRectangleLinesEx(box, 1, focused == i ? Color{74, 195, 255, 255} : muted);
-            label(fields.values[i], static_cast<int>(box.x)+7, static_cast<int>(box.y)+5, 15);
+            label(value(i), static_cast<int>(box.x)+7, static_cast<int>(box.y)+5, 15);
             if (focused == i && !replaceSelection && static_cast<int>(GetTime()*2) % 2 == 0)
-                label("|", static_cast<int>(box.x)+8+MeasureText(fields.values[i].c_str(),15), static_cast<int>(box.y)+5, 15);
+                label("|", static_cast<int>(box.x)+8+MeasureText(value(i).c_str(),15), static_cast<int>(box.y)+5, 15);
         }
         const auto action = button();
         DrawRectangleRec(action, CheckCollisionPointRec(GetMousePosition(), action) ? Color{49, 130, 158, 255} : Color{33, 96, 122, 255});
-        label("Generate / Run", static_cast<int>(action.x)+(278-MeasureText("Generate / Run",18))/2, 274, 18);
+        label("Generate / Run", static_cast<int>(action.x)+(278-MeasureText("Generate / Run",18))/2, 300, 18);
         if (error.empty()) {
-            label("4-120 s / 1-12 targets / 1-8 sensors", side+16, 307, 12, muted);
-            label("Click a value to replace; Tab to move", side+16, 323, 12, muted);
+            if (page > 0 && focused >= 0) {
+                const auto& parameter = proceduralParameters[(page-1)*5+focused];
+                label(TextFormat("%s: %g to %g", parameter.label, parameter.minimum, parameter.maximum), side+16, 333, 12, muted);
+            } else label("Click a value to replace; Tab to move", side+16, 333, 12, muted);
+            label(page == 0 ? "4-120 s / 1-12 targets / 1-8 sensors" : page == 1 ?
+                  "Speed: m/s at 20 s, scales with duration" : "Quality/geometry scales; 1 = default", side+16, 349, 12, muted);
         } else {
             // Fit validation feedback into two compact lines; full details also
             // go to stderr. Existing playback stays intact on a rejected run.
             std::size_t split = std::min<std::size_t>(error.size(), 44);
             while (split && MeasureText(error.substr(0,split).c_str(),12) > 278) --split;
-            label(error.substr(0,split), side+16, 307, 12, Color{255,166,87,255});
-            label(error.substr(split,44), side+16, 323, 12, Color{255,166,87,255});
+            label(error.substr(0,split), side+16, 333, 12, Color{255,166,87,255});
+            label(error.substr(split,44), side+16, 349, 12, Color{255,166,87,255});
         }
     }
 };
@@ -200,13 +222,13 @@ void draw(const std::optional<Playback>& playback, const std::vector<SensorGeome
     label("Recording viewer / world Cartesian / truth hidden", 24, 50, 17, muted);
     if (!playback) label("Choose parameters, then Generate / Run", 30, 105, 20, muted);
     const std::string status = !playback ? "READY" : playback->done() ? "COMPLETE" : paused ? "PAUSED" : "PLAYING";
-    label(status + "  " + TextFormat("%.2fx", speed), side+16, 352, 20);
-    label("Run " + std::to_string(state.source.runId) + " / gen " + std::to_string(state.source.runGeneration), side+16, 381, 15);
-    label(TextFormat("Acquisition time  %.3f s", state.source.timeSeconds), side+16, 404, 15, muted);
-    label("Events  " + std::to_string(state.events) + " / " + std::to_string(playback ? playback->size() : 0), side+16, 433, 15);
-    label("Scans " + std::to_string(state.scans) + " / Measurements " + std::to_string(state.measurements), side+16, 455, 14);
-    label("Tracks " + std::to_string(state.snapshot.tracks.size()) + " / Sensors " + std::to_string(state.sensors.size()), side+16, 477, 15);
-    int row = 507;
+    label(status + "  " + TextFormat("%.2fx", speed), side+16, 378, 20);
+    label("Run " + std::to_string(state.source.runId) + " / gen " + std::to_string(state.source.runGeneration), side+16, 407, 15);
+    label(TextFormat("Acquisition time  %.3f s", state.source.timeSeconds), side+16, 430, 15, muted);
+    label("Events  " + std::to_string(state.events) + " / " + std::to_string(playback ? playback->size() : 0), side+16, 459, 15);
+    label("Scans " + std::to_string(state.scans) + " / Measurements " + std::to_string(state.measurements), side+16, 481, 14);
+    label("Tracks " + std::to_string(state.snapshot.tracks.size()) + " / Sensors " + std::to_string(state.sensors.size()), side+16, 503, 15);
+    int row = 533;
     std::size_t known = 0;
     for (const auto& [id, sensor] : state.sensors) {
         const bool geometry = std::any_of(layout.begin(), layout.end(), [&](const auto& item) {

@@ -192,6 +192,22 @@ void proceduralControlsAndRun() {
     const auto custom = prepareProceduralRecording(fields.config());
     check(custom.layout.size() == 4 && custom.events.back().identity.timeSeconds == 4,
           "UI duration/counts were not forwarded");
+    fields.parameters = {"8", "12", "0", "0", "1.5", "1.6", "3", "0", "0.9", "0"};
+    const auto retained = fields.parameters;
+    const auto extended = fields.config();
+    check(extended.speedMin == 8 && extended.speedMax == 12 && extended.maneuver == 0 &&
+          extended.convergence == 0 && extended.spawnSpread == 1.5f && extended.coverage == 1.6f &&
+          extended.layoutSpread == 3 && extended.noise == 0 && extended.reliability == .9f && extended.clutter == 0,
+          "UI parameter mapping differs from runtime");
+    const auto contrasted = prepareProceduralRecording(extended);
+    check(recordingBytes(custom.events) != recordingBytes(contrasted.events) &&
+          geometryBytes(custom.layout) != geometryBytes(contrasted.layout), "UI parameters did not reach generator");
+    check(recordingBytes(contrasted.events) == recordingBytes(prepareProceduralRecording(fields.config()).events) &&
+          fields.parameters == retained, "UI generation changed configuration or determinism");
+    for (const auto& invalid : {"", "nan", "inf", "1.2.3", "1 2", "-1", "31"}) {
+        fields.parameters[0] = invalid;
+        rejects([&] { fields.config(); });
+    }
     for (const auto& invalid : std::vector<std::pair<int,std::string>>{
              {0,""}, {0,"-1"}, {0,"4294967296"}, {0,"1 2"}, {1,"1.5"},
              {2,"3"}, {2,"121"}, {3,"0"}, {3,"13"}, {4,"0"}, {4,"9"}}) {

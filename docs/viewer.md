@@ -44,10 +44,15 @@ To open the procedural controls without loading a file:
 python scripts/dev.py viewer
 ```
 
-The sidebar exposes scenario seed **2026**, layout seed **73**, duration **20 s**,
-**4** targets and **3** sensors by default. Click a value to replace it, type digits,
+The sidebar's **Run** tab exposes scenario seed **2026**, layout seed **73**,
+duration **20 s**, **4** targets and **3** sensors by default. **Targets** adds
+min/max speed, maneuver intensity, convergence and spawn spread. **Sensors** adds
+coverage, layout spread, noise, reliability and clutter. See the
+[parameter ranges, effects and contrasting examples](procedural-scenarios.md).
+Tabs retain all values; Generate / Run uses the complete configuration across tabs.
+Click a value to replace it, type digits (or decimals for the new parameters),
 and use Tab/Shift+Tab to move between fields. Backspace edits; Ctrl+A selects the
-whole value. Enter or Escape leaves the field. Playback keyboard shortcuts are
+whole value. Focused parameter fields show their allowed range. Enter or Escape leaves the field. Playback keyboard shortcuts are
 inactive while editing. F11 toggles fullscreen even while editing; Escape leaves
 fullscreen first, otherwise it closes the window when no field is focused.
 

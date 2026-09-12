@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iosfwd>
+#include <array>
 #include "EventTransport.hpp"
 #include "MultiSensorRunner.hpp"
 
@@ -12,7 +13,28 @@ struct ProceduralConfig {
     int durationSeconds{20};
     int targetCount{4};
     int sensorCount{3};
+    float speedMin{14}, speedMax{16}; // m/s at 20 s; scaled by 20/duration.
+    float maneuver{1}, convergence{1}, spawnSpread{1};
+    float coverage{1}, layoutSpread{1}, noise{1}, reliability{1}, clutter{1};
 };
+
+struct ProceduralParameter {
+    const char* label;
+    float ProceduralConfig::* member;
+    float minimum, maximum;
+};
+inline constexpr std::array<ProceduralParameter, 10> proceduralParameters{{
+    {"Min speed", &ProceduralConfig::speedMin, 1, 30},
+    {"Max speed", &ProceduralConfig::speedMax, 1, 30},
+    {"Maneuver", &ProceduralConfig::maneuver, 0, 3},
+    {"Convergence", &ProceduralConfig::convergence, 0, 1},
+    {"Spawn spread", &ProceduralConfig::spawnSpread, .4f, 1.5f},
+    {"Coverage", &ProceduralConfig::coverage, .65f, 1.6f},
+    {"Layout spread", &ProceduralConfig::layoutSpread, .25f, 3},
+    {"Noise", &ProceduralConfig::noise, 0, 5},
+    {"Reliability", &ProceduralConfig::reliability, .35f, 1},
+    {"Clutter", &ProceduralConfig::clutter, 0, 12},
+}};
 
 struct GeneratedScenario {
     ProceduralConfig config;

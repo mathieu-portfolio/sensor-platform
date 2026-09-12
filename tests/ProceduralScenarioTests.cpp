@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -169,6 +170,122 @@ void configValidation() {
     const auto minimal = generateScenario({0xffffffffU, 0xffffffffU, 4, 1, 1});
     check(minimal.entities.size() == 1 && minimal.sensors.size() == 1, "minimum count/maximum seed rejected");
 }
+
+float radius(const Entity& entity) { return std::hypot(entity.position.x, entity.position.y); }
+void parameterEffects() {
+    const auto defaults = generateScenario({});
+    ProceduralConfig config;
+    config.speedMin = config.speedMax = 1;
+    const auto slow = generateScenario(config);
+    config.speedMin = config.speedMax = 30;
+    const auto fast = generateScenario(config);
+    check(fast.entities[0].scenarioSpeed > slow.entities[0].scenarioSpeed * 20, "speed range has no material effect");
+    config = {};
+    config.maneuver = 0;
+    const auto calm = generateScenario(config);
+    config.maneuver = 3;
+    const auto agile = generateScenario(config);
+    for (std::size_t i = 0; i < calm.entities.size(); ++i) {
+        const auto& a = calm.entities[i];
+        const auto& b = agile.entities[i];
+        check(a.scenarioLateralAmplitude == 0 && a.scenarioBurstMultiplier == 1, "calm paths still maneuver");
+        if (b.scenarioMotion == ScenarioPathMotion::Arc || b.scenarioMotion == ScenarioPathMotion::ZigZag)
+            check(std::abs(b.scenarioLateralAmplitude) >= 36, "maneuver intensity did not increase turns");
+        if (b.scenarioMotion == ScenarioPathMotion::AccelerationBurst)
+            check(b.scenarioBurstMultiplier >= 1.9f, "maneuver intensity did not increase bursts");
+    }
+    config = {};
+    config.convergence = 0;
+    const auto dispersed = generateScenario(config);
+    MultiSensorRunner inward(defaults.entities, defaults.sensors), outward(dispersed.entities, dispersed.sensors);
+    inward.advanceTo(10); outward.advanceTo(10);
+    for (std::size_t i = 0; i < defaults.entities.size(); ++i)
+        check(radius(outward.world().entities()[i]) > radius(inward.world().entities()[i]) + 100,
+              "dispersed targets still converge");
+    config = {};
+    config.spawnSpread = .4f;
+    const auto near = generateScenario(config);
+    config.spawnSpread = 1.5f;
+    const auto far = generateScenario(config);
+    check(radius(far.entities[0]) > radius(near.entities[0])*3, "spawn spread did not move starts");
+    config = {};
+    config.layoutSpread = .25f;
+    const auto compact = generateScenario(config);
+    config.layoutSpread = 3;
+    const auto wide = generateScenario(config);
+    check(std::hypot(wide.sensors[0].position.x, wide.sensors[0].position.y) >
+          std::hypot(compact.sensors[0].position.x, compact.sensors[0].position.y)*10, "layout spread ineffective");
+    config = {};
+    config.coverage = .65f;
+    const auto small = generateScenario(config);
+    config.coverage = 1.6f;
+    const auto large = generateScenario(config);
+    check(large.sensors[0].definition.range > small.sensors[0].definition.range*1.5f, "coverage scale ineffective");
+    config = {};
+    config.noise = 0; config.clutter = 0;
+    const auto clean = generateScenario(config);
+    config.noise = 5; config.clutter = 12; config.reliability = .35f;
+    const auto noisy = generateScenario(config);
+    for (std::size_t i = 0; i < clean.sensors.size(); ++i) {
+        const auto& a = clean.sensors[i].definition;
+        const auto& b = noisy.sensors[i].definition;
+        check(a.rangeNoise == 0 && b.rangeNoise >= 1.5f, "noise scale ineffective");
+        check(a.falsePositiveRateHz == 0 && b.falsePositiveRateHz >= .6f, "clutter scale ineffective");
+        check(b.detectionProbability < a.detectionProbability*.36f, "reliability scale ineffective");
+    }
+    // Every knob individually reaches the recording path, repeats exactly, and
+    // rejects non-finite/out-of-range input rather than silently clamping it.
+    for (const auto& parameter : proceduralParameters) {
+        ProceduralConfig low, high;
+        low.durationSeconds = high.durationSeconds = 4;
+        low.speedMin = high.speedMin = 1;
+        low.speedMax = high.speedMax = 30;
+        low.*(parameter.member) = parameter.minimum;
+        high.*(parameter.member) = parameter.maximum;
+        const auto lowBytes = recording(generateScenario(low));
+        const auto highBytes = recording(generateScenario(high));
+        check(lowBytes != highBytes, "parameter did not affect recorded measurements");
+        check(highBytes == recording(generateScenario(high)), "complete configuration is not deterministic");
+        high.*(parameter.member) = parameter.maximum + 1;
+        rejects([&] { generateScenario(high); });
+        high.*(parameter.member) = std::numeric_limits<float>::quiet_NaN();
+        rejects([&] { generateScenario(high); });
+    }
+    config = {}; config.speedMin = 20; config.speedMax = 10;
+    rejects([&] { generateScenario(config); });
+}
+
+void variedCoverageAndSeeds() {
+    for (unsigned seed = 0; seed < 24; ++seed) {
+        ProceduralConfig config{seed, seed*31+7, seed%2 ? 4 : 120, seed%3 ? 4 : 12, seed%3 ? 1 : 8};
+        unsigned random = seed + 1;
+        for (const auto& parameter : proceduralParameters) {
+            random = random*1664525U + 1013904223U;
+            const float fraction = seed < 2 ? static_cast<float>(seed) : (random%1001)/1000.0f;
+            config.*(parameter.member) = parameter.minimum + (parameter.maximum-parameter.minimum)*fraction;
+        }
+        if (config.speedMin > config.speedMax) std::swap(config.speedMin, config.speedMax);
+        const auto scenario = generateScenario(config);
+        auto otherSeed = config; ++otherSeed.scenarioSeed;
+        check(layout(scenario) == layout(generateScenario(otherSeed)), "target seed changed extended layout");
+        otherSeed = config; ++otherSeed.layoutSeed;
+        const auto other = generateScenario(otherSeed);
+        MultiSensorRunner a(scenario.entities, scenario.sensors), b(other.entities, other.sensors);
+        for (int step = 0; step <= 16; ++step) {
+            const float time = config.durationSeconds * step / 16.0f;
+            a.advanceTo(time); b.advanceTo(time);
+            for (std::size_t i = 0; i < scenario.entities.size(); ++i) {
+                const auto& entity = a.world().entities()[i];
+                check(std::isfinite(radius(entity)) && radius(entity) < 1500, "extended path is unbounded");
+                check(entity.position.x == b.world().entities()[i].position.x &&
+                      entity.position.y == b.world().entities()[i].position.y, "layout seed changed extended motion");
+                if (step <= 8) for (const auto& sensor : scenario.sensors)
+                    check(std::hypot(entity.position.x-sensor.position.x, entity.position.y-sensor.position.y)
+                          <= sensor.definition.range, "extended path escaped guaranteed first-half coverage");
+            }
+        }
+    }
+}
 }
 int main() {
     try {
@@ -176,6 +293,8 @@ int main() {
         coverageAndInteraction();
         motionAndViewer();
         configValidation();
+        parameterEffects();
+        variedCoverageAndSeeds();
         std::cout << "Procedural generation, motion, recording and viewer checks passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

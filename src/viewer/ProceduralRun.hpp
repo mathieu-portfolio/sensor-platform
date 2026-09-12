@@ -10,6 +10,7 @@ namespace sensor_platform::viewer {
 struct ProceduralFields {
     ProceduralFields();
     std::array<std::string, 5> values;
+    std::array<std::string, proceduralParameters.size()> parameters;
     ProceduralConfig config() const;
 };
 
