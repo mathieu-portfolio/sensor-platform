@@ -11,6 +11,23 @@ SPEC.loader.exec_module(dev)
 
 
 class DeveloperWorkflowTests(unittest.TestCase):
+    def test_viewer_routes_selected_build_and_forwards_arguments(self):
+        with tempfile.TemporaryDirectory(prefix="viewer build ") as directory:
+            build = Path(directory)
+            for multi_config in (False, True):
+                if multi_config:
+                    (build / "CMakeCache.txt").write_text("CMAKE_CONFIGURATION_TYPES:STRING=Debug;Release\n")
+                binary = (build / "Release" if multi_config else build) / (
+                    "sensor_platform_viewer.exe" if dev.os.name == "nt" else "sensor_platform_viewer")
+                for extra in (["demo/results/recording.events", "--layout", "demo/results/sensors.layout",
+                               "--frames", "2", "--screenshot", "image with spaces.png"], ["--help"], ["--", "--help"]):
+                    with self.subTest(multi_config=multi_config, extra=extra):
+                        with patch.object(dev.subprocess, "run") as execute:
+                            self.assertEqual(dev.main(["--build-dir", directory, "--config", "Release", "viewer", *extra]), 0)
+                        execute.assert_called_once()
+                        self.assertEqual(execute.call_args.args[0], [str(binary), *(extra[1:] if extra[0] == "--" else extra)])
+                        self.assertEqual(execute.call_args.kwargs["cwd"], dev.ROOT)
+
     def test_binary_layout_and_explicit_runtime_override(self):
         with tempfile.TemporaryDirectory(prefix="dev build ") as directory:
             build = Path(directory)

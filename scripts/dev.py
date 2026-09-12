@@ -65,6 +65,9 @@ def commands(args):
         return [[python, "tools/validate_kafka.py", "--bin-dir", str(binaries), *extra]]
     if args.command == "record":
         return [[runtime, "run", "--record", args.path, *extra]]
+    if args.command == "viewer":
+        viewer = str(binaries / ("sensor_platform_viewer.exe" if os.name == "nt" else "sensor_platform_viewer"))
+        return [[viewer, *(["--help"] if args.viewer_help else []), *extra]]
     if args.command == "demo":
         viewer = str(binaries / ("sensor_platform_viewer.exe" if os.name == "nt" else "sensor_platform_viewer"))
         return [[python, "-m", "scripts.demo", "--runtime", runtime, "--viewer", viewer, "--output", args.output]]
@@ -99,6 +102,9 @@ def parser():
     test = sub.add_parser("test", help="target existing tests; default is C++ unit tests")
     test.add_argument("group", nargs="?", default="unit", choices=(*CTEST_GROUPS, *PYTHON_GROUPS, "kafka"))
     test.add_argument("extra", nargs=argparse.REMAINDER, help="CTest / unittest / validate_kafka.py arguments")
+    viewer = sub.add_parser("viewer", add_help=False, help="open a recording in the graphical viewer (viewer --help for arguments)")
+    viewer.add_argument("--help", dest="viewer_help", action="store_true")
+    viewer.add_argument("extra", nargs=argparse.REMAINDER)
     for name, help_text in [("run", "run the local C++ sample"), ("record", "record a local run"),
                             ("demo", "run the curated recording/fusion/quality/analytics demo"),
                             ("replay", "validate/replay a recording"), ("analytics", "forward to python -m analytics"),

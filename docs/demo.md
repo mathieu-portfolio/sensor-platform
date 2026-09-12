@@ -39,8 +39,13 @@ Everything generated is under the ignored `demo/results/` directory by default:
 | `sensors.layout`, `viewer.md` | Sample sensor geometry and exact graphical viewer command |
 | `workflow.log` | Runtime commands and their stderr diagnostics |
 
-Read `summary.json` for the outcome, then run the command in `viewer.md` to view
-the prepared recording. The viewer reuses default fusion just as the demo does;
+Read `summary.json` for the outcome, then view the prepared recording with:
+
+```sh
+python scripts/dev.py --build-dir build/consumer-verified viewer demo/results/recording.events --layout demo/results/sensors.layout
+```
+
+The viewer reuses default fusion just as the demo does;
 it does not load the precomputed JSONL. Ground truth is not included or displayed.
 No viewer binary is needed to produce the demo artifacts; its availability is
 reported in the summary.

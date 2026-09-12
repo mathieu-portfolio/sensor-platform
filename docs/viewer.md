@@ -15,16 +15,26 @@ From sensor-platform, reuse an appropriate existing build directory:
 
 ```sh
 python scripts/dev.py --build-dir build/consumer-verified build --target sensor_platform_viewer -- -DSENSOR_PLATFORM_VIEWER=ON -Draylib_DIR=<installed-raylib-cmake-directory>
-build/consumer-verified/Debug/sensor_platform_viewer.exe build/sample.events
+python scripts/dev.py --build-dir build/consumer-verified viewer build/sample.events
 ```
 
-Use your generator's binary path (single-config builds omit `Debug/`). On Windows
+The CLI selects the binary path for your generator; use `--config Release` before
+`viewer` for a Release build (default: Debug). On Windows
 with shared raylib, its runtime DLLs must be beside the executable or on `PATH`.
 An existing default sample recording can additionally show sensor geometry:
 
 ```sh
-build/consumer-verified/Debug/sensor_platform_viewer.exe build/sample.events --layout docs/sample.sensors.layout
+python scripts/dev.py --build-dir build/consumer-verified viewer build/sample.events --layout docs/sample.sensors.layout
 ```
+
+To visualize the curated `demo/results` output:
+
+```sh
+python scripts/dev.py --build-dir build/consumer-verified viewer demo/results/recording.events --layout demo/results/sensors.layout
+```
+
+Arguments are forwarded to the existing viewer; `viewer --help` shows its options.
+Relative paths resolve from the repository root, as with other developer commands.
 
 The layout is only an explicit annotation for that sample; never apply it to an
 unrelated recording. The viewer does not infer sensor configuration or truth from
