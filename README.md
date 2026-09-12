@@ -62,6 +62,10 @@ fail. The sample produces 10 scan rows and 11 measurement rows across three sens
 See [Historical analytics](docs/analytics.md) for schema, layout, duplicate rules,
 test commands and measured SQL results.
 
+For incremental imports, use `python scripts/dev.py analytics ingest recordings/ data/history`,
+then query `data/history/clean`. Original recordings are archived under `raw/`;
+known imports are skipped and only new clean runs are added.
+
 ## Load and failure experiments
 
 Run repeatable baseline, increased-load, consumer-pause, delayed-consumer and

@@ -7,6 +7,7 @@ import sys
 
 from .dataset import export_run, open_dataset, SQL_DIR
 from .track_events import open_tracks
+from .ingestion import ingest
 
 
 def main():
@@ -16,6 +17,10 @@ def main():
     export.add_argument("recording", type=Path)
     export.add_argument("dataset", type=Path)
     export.add_argument("--runtime", type=Path, required=True, help="sensor_platform executable for replay validation")
+    ingestion = commands.add_parser("ingest", help="incrementally archive recordings and materialize clean runs")
+    ingestion.add_argument("source", type=Path, help="recording file or directory containing *.events")
+    ingestion.add_argument("dataset", type=Path, help="dataset root containing raw/ and clean/")
+    ingestion.add_argument("--runtime", type=Path, required=True, help="sensor_platform executable for validation")
     query = commands.add_parser("query", help="query immutable Parquet partitions using DuckDB")
     query.add_argument("dataset", type=Path)
     query.add_argument("--sql", type=Path, default=SQL_DIR / "sensor_summary.sql")
@@ -26,6 +31,8 @@ def main():
     try:
         if args.command == "export":
             print(json.dumps(export_run(args.recording, args.dataset, args.runtime), sort_keys=True))
+        elif args.command == "ingest":
+            print(json.dumps(ingest(args.source, args.dataset, args.runtime), sort_keys=True))
         else:
             with (open_tracks(args.dataset) if args.command == "tracks" else open_dataset(args.dataset)) as connection:
                 result = connection.execute(args.sql.read_text(encoding="utf-8"))

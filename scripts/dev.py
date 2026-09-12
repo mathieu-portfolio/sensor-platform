@@ -73,7 +73,7 @@ def commands(args):
         return [[runtime, "fuse", *extra]]
     if args.command == "kafka":
         return [[str(binaries / ("sensor_platform_kafka.exe" if os.name == "nt" else "sensor_platform_kafka")), *extra]]
-    if args.command == "analytics" and extra[:1] == ["export"] and not supplied(extra, "--runtime"):
+    if args.command == "analytics" and extra[:1] in (["export"], ["ingest"]) and not supplied(extra, "--runtime"):
         extra += ["--runtime", runtime]
     if args.command == "experiments" and extra[:1] == ["run"] and not supplied(extra, "--bin-dir"):
         extra += ["--bin-dir", str(binaries)]

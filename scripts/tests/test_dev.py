@@ -34,6 +34,16 @@ class DeveloperWorkflowTests(unittest.TestCase):
         self.assertIn("^unit$", default)
         self.assertIn("--no-tests=error", default)
 
+    def test_ingestion_receives_runtime_unless_explicitly_overridden(self):
+        args = dev.parser().parse_args(["analytics", "ingest", "inbox", "data"])
+        command = dev.commands(args)[0]
+        self.assertIn("--runtime", command)
+        self.assertEqual(command[command.index("ingest")+1:command.index("--runtime")], ["inbox", "data"])
+        args = dev.parser().parse_args(["analytics", "ingest", "inbox", "data", "--runtime", "custom"])
+        command = dev.commands(args)[0]
+        self.assertEqual(command.count("--runtime"), 1)
+        self.assertEqual(command[-1], "custom")
+
     def test_configure_only_when_requested_or_cache_missing(self):
         with tempfile.TemporaryDirectory() as directory:
             argv = ["--build-dir", directory, "build", "--target", "sensor_platform"]

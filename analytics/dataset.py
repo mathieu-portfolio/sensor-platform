@@ -32,8 +32,8 @@ def verify_partition(partition):
     return manifest
 
 
-def export_run(source, dataset, runtime):
-    source, dataset, runtime = Path(source), Path(dataset), Path(runtime).resolve()
+def validate_recording(source, runtime):
+    source, runtime = Path(source), Path(runtime).resolve()
     events, normalized, source_hash, duplicates = read_unique(source)
     # Use the existing authoritative lifecycle/order validator, not a second Python implementation.
     # This happens before creating or changing a dataset.
@@ -45,6 +45,17 @@ def export_run(source, dataset, runtime):
                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env, timeout=60)
         if result.returncode:
             raise ValueError("runtime validation failed: " + result.stderr.decode(errors="replace").strip())
+    return events, source_hash, duplicates
+
+
+def export_run(source, dataset, runtime):
+    events, source_hash, duplicates = validate_recording(source, runtime)
+    return materialize_run(events, source_hash, duplicates, dataset)
+
+
+def materialize_run(events, source_hash, duplicates, dataset):
+    """Publish an already validated run using the existing immutable partition rules."""
+    dataset = Path(dataset)
     run_id = events[0].run_id
     destination = dataset / f"run_id={run_id}"
 

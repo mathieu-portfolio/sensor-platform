@@ -35,7 +35,67 @@ For Kafka, first run the existing recorder to completion, then export its
 `.events` file using the same command. Direct continuous Kafka-to-Parquet
 consumption is outside this milestone.
 
-## Layout and schema
+## Incremental raw-to-clean ingestion
+
+Use `ingest` for a recording file or a nonrecursive inbox directory of `*.events`
+files. The existing `export` command remains available for a direct clean export.
+
+```sh
+python scripts/dev.py analytics ingest recordings/ data/history
+python scripts/dev.py analytics query data/history/clean --sql analytics/sql/sensor_summary.sql
+```
+
+Use global `--build-dir <existing-build>` before `analytics` if needed. The dev
+wrapper supplies the runtime path; direct `python -m analytics ingest` requires
+`--runtime <sensor_platform>`. Input files are visited in sorted filename order.
+An empty inbox is a no-op. Results are JSON with per-recording status and counts
+of new runs, new recordings and unchanged imports.
+
+```text
+data/history/
+  raw/
+    sha256=<original-byte-hash>/
+      source.events
+      manifest.json
+  clean/
+    run_id=42/
+      events.parquet
+      scans.parquet
+      measurements.parquet
+      manifest.json
+```
+
+Raw stores the exact snapshotted source bytes, including line endings, numeric
+spelling and identical duplicate events. Input is validated using the existing
+normalization/duplicate policy and C++ replay validator before archival. Thus raw
+files containing repeated events may need normalization before direct replay.
+Raw manifests record original SHA-256, normalized-stream SHA-256, run ID, first
+source filename and duplicate count. Filenames/paths are not import identities:
+renaming a byte-identical recording remains a no-op.
+
+Known byte hashes verify the archived bytes and corresponding clean partition,
+then skip parsing, runtime validation and Parquet conversion. New byte hashes are
+validated; only absent clean runs are materialized. Equivalent logical streams
+with different bytes receive separate raw archives but share the unchanged clean
+run. Conflicting event payloads or different normalized streams under an existing
+run ID fail before new archival; no existing data is overwritten. Existing clean
+partitions are never rebuilt to add another run. Checksums still require reading
+the selected files; this is not a timestamp-only file discovery cache.
+
+Run one importer per dataset. Each raw directory and each clean run is published
+with its own staging-directory rename; the two layers and an entire inbox batch
+are not one transaction. Raw publishes first. If conversion stops afterward,
+retrying the source rebuilds only that missing clean run from archived bytes.
+Earlier successful inbox entries remain imported when a later entry fails.
+Integrity failures are reported rather than overwritten; there is no power-loss
+durability or concurrent-writer guarantee. No mutable central registry is needed:
+the raw manifest and matching clean manifest identify a completed import.
+
+Queries continue to use the same tables and SQL; point them explicitly at `clean/`.
+Existing direct-export datasets are not moved or migrated automatically.
+Focused tests: `python scripts/dev.py test analytics -k IngestionTests`.
+
+## Clean layout and schema
 
 ```text
 data/
@@ -47,6 +107,9 @@ data/
   run_id=43/
     ...
 ```
+
+This is the direct-export layout; incremental ingestion uses the identical
+partition structure under `data/history/clean/`.
 
 One immutable directory per complete run; each contains three Zstandard-compressed
 Parquet files, including schema-bearing zero-row files when necessary. Sensors

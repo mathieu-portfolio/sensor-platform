@@ -19,6 +19,8 @@ python scripts/dev.py record build/sample.events --run-id 42
 python scripts/dev.py replay build/sample.events
 python scripts/dev.py analytics export build/sample.events data
 python scripts/dev.py analytics query data --sql analytics/sql/sensor_summary.sql
+python scripts/dev.py analytics ingest recordings/ data/history
+python scripts/dev.py analytics query data/history/clean
 python scripts/dev.py experiments run experiments/configs/baseline.json build/experiments/baseline
 python scripts/dev.py experiments report build/experiments
 ```
@@ -28,7 +30,7 @@ supplied. Existing caches/toolchains are reused; CMake handles normal regenerati
 Use `build --target sensor_platform` for a focused target, or
 `build --configure -- -DSENSOR_PLATFORM_KAFKA=ON` for configure options. Changing
 `--config` in a single-config build also requires `build --configure`.
-Tests never build implicitly. Analytics export and experiment run receive the
+Tests never build implicitly. Analytics export/ingest and experiment run receive the
 selected runtime/binary directory unless you supply their existing override flags.
 Other arguments are forwarded unchanged; for leading flags use e.g.
 `run -- --run-id 42`. Direct CMake and underlying CLI commands remain supported.
