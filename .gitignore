@@ -30,5 +30,6 @@ Thumbs.db
 # Local analytics environment and generated datasets
 /.venv/
 /data/
+/demo/results/
 __pycache__/
 *.pyc

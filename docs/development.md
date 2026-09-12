@@ -15,6 +15,7 @@ python scripts/dev.py test unit
 python scripts/dev.py test unit -R events
 python scripts/dev.py test platform -N
 python scripts/dev.py run
+python scripts/dev.py --build-dir build/consumer-verified demo
 python scripts/dev.py record build/sample.events --run-id 42
 python scripts/dev.py replay build/sample.events
 python scripts/dev.py analytics export build/sample.events data

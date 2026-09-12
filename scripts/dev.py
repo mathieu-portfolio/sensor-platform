@@ -65,6 +65,9 @@ def commands(args):
         return [[python, "tools/validate_kafka.py", "--bin-dir", str(binaries), *extra]]
     if args.command == "record":
         return [[runtime, "run", "--record", args.path, *extra]]
+    if args.command == "demo":
+        viewer = str(binaries / ("sensor_platform_viewer.exe" if os.name == "nt" else "sensor_platform_viewer"))
+        return [[python, "-m", "scripts.demo", "--runtime", runtime, "--viewer", viewer, "--output", args.output]]
     if args.command == "replay":
         return [[runtime, "replay", args.path]]
     if args.command == "run":
@@ -97,13 +100,16 @@ def parser():
     test.add_argument("group", nargs="?", default="unit", choices=(*CTEST_GROUPS, *PYTHON_GROUPS, "kafka"))
     test.add_argument("extra", nargs=argparse.REMAINDER, help="CTest / unittest / validate_kafka.py arguments")
     for name, help_text in [("run", "run the local C++ sample"), ("record", "record a local run"),
+                            ("demo", "run the curated recording/fusion/quality/analytics demo"),
                             ("replay", "validate/replay a recording"), ("analytics", "forward to python -m analytics"),
                             ("experiments", "forward to python -m experiments"), ("fuse", "fuse a recording or live stdin (-)"),
                             ("evaluation", "truth-separated fusion evaluation"), ("kafka", "forward to the Kafka runtime; broker must already be running")]:
         command = sub.add_parser(name, help=help_text)
         if name in ("record", "replay"):
             command.add_argument("path")
-        if name != "replay":
+        if name == "demo":
+            command.add_argument("--output", default="demo/results", help="dedicated demo results directory")
+        elif name != "replay":
             command.add_argument("extra", nargs=argparse.REMAINDER)
     return result
 

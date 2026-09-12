@@ -12,6 +12,9 @@ Sample configuration is a C++ `std::vector<SensorConfig>` in `src/EventTransport
 
 ## Build and run
 
+For a reproducible recording → replay → fusion → quality-checked analytics demo,
+see [the single-command demo](docs/demo.md). It also prepares graphical viewer inputs.
+
 Requires CMake 3.20+, a C++20 compiler, and `../sensor-sandbox` containing the reusable core target. The developer CLI uses Python; use Python 3.11+ for the data tooling. Run from this repository:
 
 ```sh
