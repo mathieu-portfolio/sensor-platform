@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
+# CMake owns dependency deployment, including when vcpkg is integrated globally
+# with Visual Studio or supplied as a CMake toolchain.
+set(CMAKE_VS_GLOBALS ${CMAKE_VS_GLOBALS} "VcpkgApplocalDeps=false")
+set(VCPKG_APPLOCAL_DEPS OFF)
 project(sensor_platform LANGUAGES CXX)
 
 set(SENSOR_SANDBOX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sensor-sandbox"
@@ -73,3 +77,7 @@ if(BUILD_TESTING)
     set_tests_properties(platform_headless_measurements
         PROPERTIES LABELS "platform;integration")
 endif()
+
+# Replace vcpkg's PowerShell app-local hook with CMake's binary dependency scan.
+include(cmake/RuntimeDependencies.cmake)
+sensor_platform_runtime_dependencies()

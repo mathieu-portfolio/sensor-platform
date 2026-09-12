@@ -9,6 +9,16 @@ interpreter. It handles Visual Studio versus single-config binary paths and the
 Windows Path/PATH environment collision. It never installs dependencies or starts
 a broker. Command traces go to stderr so stdout remains usable as event/CSV output.
 
+Build and test commands do not require PowerShell (`pwsh.exe` or
+`powershell.exe`). CMake disables vcpkg's automatic PowerShell DLL deployment
+in both its toolchain and Visual Studio integration. On Windows, a CMake
+post-build dependency scan copies non-system DLLs beside platform executables
+using `cmake -E copy_if_different`, with the compiler toolchain's binary inspector.
+Other platforms retain their normal loader/RPATH behavior. C++ tests run through
+CTest; Python tooling runs directly with the selected interpreter. PowerShell
+code-fence labels in data-tooling docs and generated viewer instructions are
+examples, not build/test subprocesses.
+
 ```sh
 python scripts/dev.py build
 python scripts/dev.py test unit
