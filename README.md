@@ -43,6 +43,12 @@ buffers the complete run. Replay still validates the complete file before output
 The optional topology is simulation producer -> one-partition Kafka run topic ->
 independent viewer and recorder groups. The existing local commands stay Kafka-free.
 
+## Recording viewer
+
+An optional [event-driven graphical viewer](docs/viewer.md) replays existing
+recordings with detections, fused tracks, short histories and optional sensor
+geometry. Its raylib dependency is isolated from the headless runtime.
+
 ## Historical analytics
 
 Local or Kafka-produced recordings can now be exported to immutable per-run

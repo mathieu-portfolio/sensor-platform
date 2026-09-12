@@ -1,0 +1,6 @@
+SENSOR_LAYOUT 1
+# Display annotations for the default runSample configuration only.
+# run_generation sensor_id x y heading_degrees fov_degrees range
+0 1 0 0 0 360 200
+0 2 50 20 0 360 150
+0 3 150 -20 0 360 100
