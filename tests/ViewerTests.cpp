@@ -1,4 +1,5 @@
 #include "viewer/ViewerState.hpp"
+#include "viewer/ProceduralRun.hpp"
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -143,9 +144,65 @@ void layoutValidation() {
                             "SENSOR_LAYOUT 1\n0 1 0 0 0 60 2\n0 1 1 0 0 60 2\n"})
         rejects([&] { std::istringstream input(bad); readLayout(input); });
 }
+std::string recordingBytes(const std::vector<StreamEvent>& events) {
+    std::ostringstream output;
+    writeRecording(output, events);
+    return output.str();
+}
+std::string geometryBytes(const std::vector<SensorGeometry>& layout) {
+    std::ostringstream output;
+    output.precision(17);
+    for (const auto& sensor : layout)
+        output << sensor.id << ' ' << sensor.x << ' ' << sensor.y << ' ' << sensor.range << '\n';
+    return output.str();
+}
+void proceduralControlsAndRun() {
+    ProceduralFields fields;
+    const auto defaults = fields.config();
+    check(defaults.scenarioSeed == 2026 && defaults.layoutSeed == 73 && defaults.durationSeconds == 20 &&
+          defaults.targetCount == 4 && defaults.sensorCount == 3, "UI defaults differ from curated demo");
+    const auto first = prepareProceduralRecording(defaults);
+    const auto repeated = prepareProceduralRecording(fields.config());
+    const auto bytes = recordingBytes(first.events);
+    check(bytes == recordingBytes(repeated.events), "UI repeated run is not deterministic");
+    // Compare the adapter against the existing runtime's producer and recorder.
+    std::ostringstream direct;
+    IncrementalRecording writer(direct);
+    runProcedural(43, generateScenario(defaults), [&](const auto& event) { writer.append(event); });
+    writer.finish();
+    check(bytes == direct.str(), "UI bypassed or changed the procedural recording path");
+    check(first.events.size() == 148 && first.layout.size() == 3, "Default UI run did not launch");
+    Playback playback(first.events);
+    playback.advance(20);
+    check(playback.done() && playback.state().scans == 143 && playback.state().measurements > 400,
+          "Generated recording did not reach existing playback/fusion");
+    playback.stepBackward();
+    check(!playback.done(), "Generated playback cannot step back after completion");
+    playback.restart();
+    check(playback.state().events == 0 && playback.state().histories.empty(), "Generated restart leaked tracks");
+    fields.values[0] = "2027";
+    const auto targetChanged = prepareProceduralRecording(fields.config());
+    check(bytes != recordingBytes(targetChanged.events), "Changing UI scenario seed did not change recording");
+    check(geometryBytes(first.layout) == geometryBytes(targetChanged.layout), "UI scenario seed changed locked layout");
+    fields = {};
+    fields.values[1] = "74";
+    const auto layoutChanged = prepareProceduralRecording(fields.config());
+    check(geometryBytes(first.layout) != geometryBytes(layoutChanged.layout), "Changing UI layout seed did not change geometry");
+    fields.values = {"0", "4294967295", "4", "5", "4"};
+    const auto custom = prepareProceduralRecording(fields.config());
+    check(custom.layout.size() == 4 && custom.events.back().identity.timeSeconds == 4,
+          "UI duration/counts were not forwarded");
+    for (const auto& invalid : std::vector<std::pair<int,std::string>>{
+             {0,""}, {0,"-1"}, {0,"4294967296"}, {0,"1 2"}, {1,"1.5"},
+             {2,"3"}, {2,"121"}, {3,"0"}, {3,"13"}, {4,"0"}, {4,"9"}}) {
+        fields = {};
+        fields.values[invalid.first] = invalid.second;
+        rejects([&] { fields.config(); });
+    }
+}
 }
 int main() {
-    try { stateAndFusion(); playbackTiming(); backwardPlayback(); boundedHistoryAndRetirement(); layoutValidation(); }
+    try { stateAndFusion(); playbackTiming(); backwardPlayback(); boundedHistoryAndRetirement(); layoutValidation(); proceduralControlsAndRun(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
-    std::cout << "Viewer state, replay timing, fusion reuse, bounded histories and layout checks passed\n";
+    std::cout << "Viewer state, replay, fusion, layout and procedural controls checks passed\n";
 }

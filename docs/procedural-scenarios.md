@@ -39,8 +39,8 @@ python scripts/dev.py viewer build/generated.events --layout build/generated.lay
 `--layout-output` requires `--procedural` and is optional for headless callers.
 Malformed/out-of-range configuration is rejected before simulation events are
 emitted. The original `run`/`record` sample and Kafka sample are unchanged.
-The C++ configuration and generator are callable directly by a future UI;
-there is no viewer-side simulation/configuration implementation in this pass.
+The viewer's compact controls call the same C++ configuration and generator
+through a headless recording adapter. See [viewer controls](viewer.md).
 
 ## Target rules and motion
 
@@ -115,4 +115,5 @@ network, while changing only layout seed preserves all target motion.
 sensor vector using round-trip float precision and the existing `SENSOR_LAYOUT 1`
 format. It contains geometry only, with no target truth. The demo prepares the
 existing viewer command; playback still uses recording events and platform
-fusion. No viewer UI, event contracts, analytics or Kafka behavior were added.
+fusion. The viewer can also prepare a recording using its Generate / Run action;
+event contracts, analytics and Kafka behavior remain unchanged.

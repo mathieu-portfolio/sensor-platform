@@ -1,10 +1,12 @@
 #include "ViewerState.hpp"
+#include "ProceduralRun.hpp"
 #include <raylib.h>
 #include <algorithm>
 #include <charconv>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 
 using namespace sensor_platform;
@@ -33,9 +35,99 @@ struct View {
 void label(const std::string& text, int x, int y, int size = 18, Color color = ink) {
     DrawText(text.c_str(), x, y, size, color);
 }
-void draw(const Playback& playback, const std::vector<SensorGeometry>& layout, const View& view,
+View fit(const std::vector<sensor_sandbox::StreamEvent>& events, const std::vector<SensorGeometry>& layout) {
+    double left = 0, right = 1, bottom = 0, top = 1;
+    auto include = [&](double x, double y) {
+        left = std::min(left,x); right = std::max(right,x);
+        bottom = std::min(bottom,y); top = std::max(top,y);
+    };
+    for (const auto& event : events) for (const auto& d : worldObservations(event)) include(d.x,d.y);
+    for (const auto& sensor : layout) {
+        include(sensor.x-sensor.range, sensor.y-sensor.range);
+        include(sensor.x+sensor.range, sensor.y+sensor.range);
+    }
+    return {(left+right)/2, (bottom+top)/2, std::max({right-left,top-bottom,20.})*1.15};
+}
+
+struct ScenarioControls {
+    ProceduralFields fields;
+    int focused{-1};
+    bool replaceSelection{};
+    std::string error;
+    Rectangle field(int index) const {
+        return {static_cast<float>(GetScreenWidth()-168), 124.0f+28*index, 152, 24};
+    }
+    Rectangle button() const { return {static_cast<float>(GetScreenWidth()-294), 268, 278, 30}; }
+    bool update() {
+        bool run = false;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            focused = -1;
+            for (int i = 0; i < 5; ++i)
+                if (CheckCollisionPointRec(GetMousePosition(), field(i))) focused = i;
+            replaceSelection = focused >= 0;
+            run = CheckCollisionPointRec(GetMousePosition(), button());
+        }
+        if (focused >= 0) {
+            if (IsKeyPressed(KEY_TAB)) {
+                focused = (focused + (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? 4 : 1)) % 5;
+                replaceSelection = true;
+            }
+            auto& value = fields.values[focused];
+            if ((IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL)) && IsKeyPressed(KEY_A))
+                replaceSelection = true;
+            for (int character = GetCharPressed(); character; character = GetCharPressed()) {
+                if (character < '0' || character > '9') continue;
+                if (replaceSelection) value.clear();
+                replaceSelection = false;
+                if (value.size() < 10) value += static_cast<char>(character);
+                error.clear();
+            }
+            if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
+                if (replaceSelection) value.clear();
+                else if (!value.empty()) value.pop_back();
+                replaceSelection = false;
+                error.clear();
+            }
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_ESCAPE)) focused = -1;
+        } else {
+            while (GetCharPressed()) {} // Do not carry playback keystrokes into a field.
+        }
+        return run;
+    }
+    void draw() const {
+        const int side = GetScreenWidth()-310;
+        label("PROCEDURAL SCENARIO", side+16, 96, 17);
+        const char* names[]{"Scenario seed", "Layout seed", "Duration (s)", "Targets", "Sensors"};
+        for (int i = 0; i < 5; ++i) {
+            const auto box = field(i);
+            label(names[i], side+16, static_cast<int>(box.y)+5, 14, muted);
+            DrawRectangleRec(box, focused == i && replaceSelection ? Color{35, 66, 87, 255} : background);
+            DrawRectangleLinesEx(box, 1, focused == i ? Color{74, 195, 255, 255} : muted);
+            label(fields.values[i], static_cast<int>(box.x)+7, static_cast<int>(box.y)+5, 15);
+            if (focused == i && !replaceSelection && static_cast<int>(GetTime()*2) % 2 == 0)
+                label("|", static_cast<int>(box.x)+8+MeasureText(fields.values[i].c_str(),15), static_cast<int>(box.y)+5, 15);
+        }
+        const auto action = button();
+        DrawRectangleRec(action, CheckCollisionPointRec(GetMousePosition(), action) ? Color{49, 130, 158, 255} : Color{33, 96, 122, 255});
+        label("Generate / Run", static_cast<int>(action.x)+(278-MeasureText("Generate / Run",18))/2, 274, 18);
+        if (error.empty()) {
+            label("4-120 s / 1-12 targets / 1-8 sensors", side+16, 307, 12, muted);
+            label("Click a value to replace; Tab to move", side+16, 323, 12, muted);
+        } else {
+            // Fit validation feedback into two compact lines; full details also
+            // go to stderr. Existing playback stays intact on a rejected run.
+            std::size_t split = std::min<std::size_t>(error.size(), 44);
+            while (split && MeasureText(error.substr(0,split).c_str(),12) > 278) --split;
+            label(error.substr(0,split), side+16, 307, 12, Color{255,166,87,255});
+            label(error.substr(split,44), side+16, 323, 12, Color{255,166,87,255});
+        }
+    }
+};
+
+void draw(const std::optional<Playback>& playback, const std::vector<SensorGeometry>& layout, const View& view,
           bool paused, double speed) {
-    const auto& state = playback.state();
+    static const State empty;
+    const auto& state = playback ? playback->state() : empty;
     const int width = GetScreenWidth(), height = GetScreenHeight(), side = width - 310;
     ClearBackground(background);
     BeginScissorMode(0, 80, side, height-126);
@@ -84,34 +176,31 @@ void draw(const Playback& playback, const std::vector<SensorGeometry>& layout, c
     DrawRectangle(side, 80, 310, height-80, panel);
     label("SENSOR PLATFORM", 24, 18, 24);
     label("Recording viewer / world Cartesian / truth hidden", 24, 50, 17, muted);
-    const std::string status = playback.done() ? "COMPLETE" : paused ? "PAUSED" : "PLAYING";
-    label(status + "  " + TextFormat("%.2fx", speed), side+20, 100, 22);
-    label("Run " + std::to_string(state.source.runId) + " / gen " + std::to_string(state.source.runGeneration), side+20, 140);
-    label(TextFormat("Acquisition time  %.3f s", state.source.timeSeconds), side+20, 168, 17, muted);
-    label("Events  " + std::to_string(state.events) + " / " + std::to_string(playback.size()), side+20, 211);
-    label("Scans  " + std::to_string(state.scans), side+20, 239);
-    label("Measurements  " + std::to_string(state.measurements), side+20, 267);
-    label("Active tracks  " + std::to_string(state.snapshot.tracks.size()), side+20, 295);
-    label("Sensors  " + std::to_string(state.sensors.size()), side+20, 335);
-    int row = 365;
+    if (!playback) label("Choose parameters, then Generate / Run", 30, 105, 20, muted);
+    const std::string status = !playback ? "READY" : playback->done() ? "COMPLETE" : paused ? "PAUSED" : "PLAYING";
+    label(status + "  " + TextFormat("%.2fx", speed), side+16, 352, 20);
+    label("Run " + std::to_string(state.source.runId) + " / gen " + std::to_string(state.source.runGeneration), side+16, 381, 15);
+    label(TextFormat("Acquisition time  %.3f s", state.source.timeSeconds), side+16, 404, 15, muted);
+    label("Events  " + std::to_string(state.events) + " / " + std::to_string(playback ? playback->size() : 0), side+16, 433, 15);
+    label("Scans " + std::to_string(state.scans) + " / Measurements " + std::to_string(state.measurements), side+16, 455, 14);
+    label("Tracks " + std::to_string(state.snapshot.tracks.size()) + " / Sensors " + std::to_string(state.sensors.size()), side+16, 477, 15);
+    int row = 507;
     std::size_t known = 0;
     for (const auto& [id, sensor] : state.sensors) {
         const bool geometry = std::any_of(layout.begin(), layout.end(), [&](const auto& item) {
             return item.generation == state.source.runGeneration && item.id == id;
         });
         known += geometry;
-        if (row > height-205) continue;
+        if (row > height-143) continue;
         label("S" + std::to_string(id) + "  g" + std::to_string(sensor.generation) +
               "  scans " + std::to_string(sensor.scans) + "  hits " + std::to_string(sensor.measurements),
-              side+20, row, 15, sensorColor(id));
+              side+16, row, 14, sensorColor(id));
         row += 24;
     }
-    label("Geometry: " + std::to_string(known) + "/" + std::to_string(state.sensors.size()) + " sensors", side+20, height-184, 16, muted);
-    label(layout.empty() ? "Geometry unavailable" : "Layout supplied separately", side+20, height-160, 16, muted);
-    label("+ Latest scan per sensor", side+20, height-126, 16, muted);
-    label("[] Tracks / short histories", side+20, height-102, 16, muted);
-    label("Green confirmed / amber coast", side+20, height-78, 15, muted);
-    label("Yellow tentative", side+20, height-55, 15, muted);
+    label("Geometry: " + std::to_string(known) + "/" + std::to_string(state.sensors.size()) + " sensors", side+16, height-120, 14, muted);
+    label("+ Latest scan   [] Track / history", side+16, height-98, 14, muted);
+    label("Green confirmed / amber coast", side+16, height-76, 14, muted);
+    label("Yellow tentative", side+16, height-54, 14, muted);
     DrawRectangle(0, height-46, side, 46, background);
     label("SPACE pause   LEFT/RIGHT step   R restart   +/- speed   Wheel zoom   Drag pan   F fit", 20, height-29, 15, muted);
 }
@@ -119,15 +208,21 @@ void draw(const Playback& playback, const std::vector<SensorGeometry>& layout, c
 
 int main(int argc, char** argv) {
     try {
-        if (argc < 2 || std::string(argv[1]) == "--help") {
-            std::cout << "Usage: sensor_platform_viewer <recording.events> [--layout sensors.layout]\n"
+        if (argc > 1 && std::string(argv[1]) == "--help") {
+            std::cout << "Usage: sensor_platform_viewer [recording.events] [--layout sensors.layout]\n"
                          "       [--frames N] [--screenshot image.png]\n"
-                         "Complete recording only. Reuses replay validation and default platform fusion.\n";
-            return argc < 2 ? 1 : 0;
+                         "Without a recording, use the procedural controls and Generate / Run.\n"
+                         "Reuses complete recordings, replay validation and default platform fusion.\n";
+            return 0;
         }
-        std::string layoutPath, screenshot;
+        std::string recordingPath, layoutPath, screenshot;
+        int firstOption = 1;
+        if (argc > 1 && std::string(argv[1]).rfind("--", 0) != 0) {
+            recordingPath = argv[1];
+            firstOption = 2;
+        }
         int frameLimit = 0;
-        for (int i = 2; i < argc; ++i) {
+        for (int i = firstOption; i < argc; ++i) {
             const std::string option = argv[i];
             if (++i == argc) throw std::invalid_argument("Missing value for " + option);
             const std::string value = argv[i];
@@ -139,53 +234,77 @@ int main(int argc, char** argv) {
                     throw std::invalid_argument("--frames must be positive");
             } else throw std::invalid_argument("Unknown option: " + option);
         }
-        std::ifstream recording(argv[1], std::ios::binary);
-        if (!recording) throw std::runtime_error("Cannot open recording: " + std::string(argv[1]));
-        auto events = readRecording(recording);
+        std::optional<Playback> playback;
         std::vector<SensorGeometry> layout;
+        std::vector<sensor_sandbox::StreamEvent> events;
+        if (!recordingPath.empty()) {
+            std::ifstream recording(recordingPath, std::ios::binary);
+            if (!recording) throw std::runtime_error("Cannot open recording: " + recordingPath);
+            events = readRecording(recording);
+        } else if (!layoutPath.empty()) {
+            throw std::invalid_argument("--layout requires a recording; generated runs provide their own layout");
+        }
         if (!layoutPath.empty()) {
             std::ifstream input(layoutPath);
             if (!input) throw std::runtime_error("Cannot open layout: " + layoutPath);
             layout = readLayout(input);
         }
-        // Stable fit from recorded observations and explicitly supplied geometry.
-        double left = 0, right = 1, bottom = 0, top = 1;
-        auto include = [&](double x, double y) {
-            left = std::min(left,x); right = std::max(right,x);
-            bottom = std::min(bottom,y); top = std::max(top,y);
-        };
-        for (const auto& event : events) for (const auto& d : worldObservations(event)) include(d.x,d.y);
-        for (const auto& sensor : layout) {
-            include(sensor.x-sensor.range, sensor.y-sensor.range);
-            include(sensor.x+sensor.range, sensor.y+sensor.range);
-        }
-        View view{(left+right)/2, (bottom+top)/2, std::max({right-left,top-bottom,20.})*1.15};
-        Playback playback(std::move(events));
+        View view = events.empty() ? View{} : fit(events, layout);
+        if (!events.empty()) playback.emplace(std::move(events));
+        ScenarioControls controls;
         SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT | FLAG_WINDOW_HIGHDPI);
         InitWindow(1200, 800, "Sensor Platform | Event-driven recording viewer");
         if (!IsWindowReady()) throw std::runtime_error("Cannot initialize viewer window");
         SetWindowMinSize(1000, 700);
+        SetExitKey(KEY_NULL); // Escape first leaves an input, then closes the window.
         SetTargetFPS(60);
         bool paused = false;
         double speed = 1.;
         int frames = 0;
         while (!WindowShouldClose()) {
-            if (IsKeyPressed(KEY_SPACE)) paused = !paused;
-            if (IsKeyPressed(KEY_R)) playback.restart();
-            if (IsKeyPressed(KEY_RIGHT)) { paused = true; playback.step(); }
-            if (IsKeyPressed(KEY_LEFT)) { paused = true; playback.stepBackward(); }
-            if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) speed = std::min(16.,speed*2);
-            if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) speed = std::max(.0625,speed/2);
-            if (IsKeyPressed(KEY_F)) { view.pan = {}; view.zoom = 1; }
+            const bool wasEditing = controls.focused >= 0;
+            if (controls.update()) {
+                try {
+                    const auto config = controls.fields.config();
+                    auto prepared = prepareProceduralRecording(config);
+                    auto nextView = fit(prepared.events, prepared.layout);
+                    Playback nextPlayback(std::move(prepared.events));
+                    nextPlayback.advance(0);
+                    playback = std::move(nextPlayback);
+                    layout = std::move(prepared.layout);
+                    view = nextView;
+                    paused = false;
+                    speed = 1;
+                    controls.error.clear();
+                    std::cout << "Generated procedural recording: scenario seed=" << config.scenarioSeed
+                              << ", layout seed=" << config.layoutSeed << ", duration=" << config.durationSeconds
+                              << ", targets=" << config.targetCount << ", sensors=" << config.sensorCount
+                              << ", events=" << playback->size() << std::endl;
+                } catch (const std::exception& error) {
+                    controls.error = error.what();
+                    std::cerr << "Generate / Run: " << error.what() << '\n';
+                }
+            }
+            if (!wasEditing && controls.focused < 0) {
+                if (IsKeyPressed(KEY_ESCAPE)) break;
+                if (IsKeyPressed(KEY_SPACE)) paused = !paused;
+                if (playback && IsKeyPressed(KEY_R)) playback->restart();
+                if (playback && IsKeyPressed(KEY_RIGHT)) { paused = true; playback->step(); }
+                if (playback && IsKeyPressed(KEY_LEFT)) { paused = true; playback->stepBackward(); }
+                if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) speed = std::min(16.,speed*2);
+                if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) speed = std::max(.0625,speed/2);
+                if (IsKeyPressed(KEY_F)) { view.pan = {}; view.zoom = 1; }
+            }
             if (GetMouseX() < GetScreenWidth()-310) {
                 view.zoom = std::clamp(view.zoom*std::pow(1.15f,GetMouseWheelMove()), .1f,20.f);
                 if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
                     const auto delta = GetMouseDelta(); view.pan.x += delta.x; view.pan.y += delta.y;
                 }
             }
-            if (!paused) playback.advance(GetFrameTime()*speed);
+            if (playback && !paused) playback->advance(GetFrameTime()*speed);
             BeginDrawing();
             draw(playback,layout,view,paused,speed);
+            controls.draw();
             EndDrawing();
             if (frameLimit && ++frames >= frameLimit) break;
         }
@@ -195,8 +314,8 @@ int main(int argc, char** argv) {
             UnloadImage(capture);
             if (!saved) { CloseWindow(); throw std::runtime_error("Cannot save screenshot: " + screenshot); }
         }
-        std::cout << "Viewer rendered " << playback.state().events << "/" << playback.size()
-                  << " events; active tracks=" << playback.state().snapshot.tracks.size() << '\n';
+        std::cout << "Viewer rendered " << (playback ? playback->state().events : 0) << "/" << (playback ? playback->size() : 0)
+                  << " events; active tracks=" << (playback ? playback->state().snapshot.tracks.size() : 0) << '\n';
         CloseWindow();
     } catch (const std::exception& error) {
         std::cerr << "viewer: " << error.what() << '\n';

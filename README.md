@@ -35,7 +35,7 @@ python scripts/dev.py --build-dir <build> demo
 
 The demo procedurally generates four targets and three radars, verifies replay equivalence, runs fusion, ingests through the quality gate, executes existing SQL summaries and prepares a matching viewer layout. Target and sensor-layout seeds are independent; `demo --help` exposes seeds, duration and counts. Results go to **`demo/results/`**: start with `summary.json`, the CSV summaries and `viewer.md`. Repeating the same configuration produces the same recording and returns ingestion status `unchanged`. [Generation rules and configuration API](docs/procedural-scenarios.md).
 
-Kafka and raylib are optional; neither is required for the demo. To open the recording graphically, [build the viewer](docs/viewer.md) and use the command in `demo/results/viewer.md`. Dependencies and builds are explicit, never implicit side effects of running the demo. [Full artifact list and repeatability](docs/demo.md) · [Developer commands](docs/development.md)
+Kafka and raylib are optional; neither is required for the demo. To open the recording graphically, [build the viewer](docs/viewer.md) and use the command in `demo/results/viewer.md`. Or run `python scripts/dev.py viewer` and use its compact procedural controls and **Generate / Run** button. Dependencies and builds are explicit, never implicit side effects of running the demo. [Full artifact list and repeatability](docs/demo.md) · [Developer commands](docs/development.md)
 
 ## Architecture
 
@@ -56,7 +56,7 @@ flowchart LR
     Clean --> SQL["DuckDB / SQL summaries"]
 ```
 
-`sensor-platform` owns orchestration, recording, transport, fusion and data tooling. It consumes `sensor_core` through CMake `add_subdirectory` from the sibling checkout, with sandbox app/tests disabled. It does not copy the sandbox application. The headless targets have no raylib dependency; the viewer consumes recorded events and never advances the simulation. [Architecture and implementation history](docs/architecture.md)
+`sensor-platform` owns orchestration, recording, transport, fusion and data tooling. It consumes `sensor_core` through CMake `add_subdirectory` from the sibling checkout, with sandbox app/tests disabled. It does not copy the sandbox application. The headless targets have no raylib dependency; viewer playback consumes recorded events. Its Generate / Run action prepares a complete recording through a headless adapter; rendering never advances simulation. [Architecture and implementation history](docs/architecture.md)
 
 ## Engineering capabilities
 

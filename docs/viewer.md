@@ -1,11 +1,13 @@
 # Event-driven recording viewer
 
-`sensor_platform_viewer` is an optional raylib executable. It reads an existing
-complete format-v1 `.events` recording through `readRecording`, validates it before
-opening the window, and feeds recorded events to the existing `FusionSystem` with
-its default configuration. It does not link the platform runner, create a world,
-advance physics, or sample sensors. Graphical dependencies link only to the viewer;
-viewer state and its tests remain headless. No event format or core changes are needed.
+`sensor_platform_viewer` is an optional raylib executable. It reads complete
+format-v1 `.events` recordings through `readRecording` and feeds recorded events
+to the existing `FusionSystem` with its default configuration. Files are validated
+before the window opens. Its compact procedural controls can also prepare a new
+recording using the existing platform runner, then load it through the same decoder
+and playback path. Rendering and playback ticks never advance simulation.
+Graphical dependencies link only to the viewer; viewer state, the procedural-run
+adapter and their tests remain headless. Event contracts and fusion are unchanged.
 
 ## Build and open
 
@@ -36,9 +38,37 @@ python scripts/dev.py --build-dir build/consumer-verified viewer demo/results/re
 Arguments are forwarded to the existing viewer; `viewer --help` shows its options.
 Relative paths resolve from the repository root, as with other developer commands.
 
+To open the procedural controls without loading a file:
+
+```sh
+python scripts/dev.py viewer
+```
+
+The sidebar exposes scenario seed **2026**, layout seed **73**, duration **20 s**,
+**4** targets and **3** sensors by default. Click a value to replace it, type digits,
+and use Tab/Shift+Tab to move between fields. Backspace edits; Ctrl+A selects the
+whole value. Enter or Escape leaves the field. Playback keyboard shortcuts are
+inactive while editing; Escape closes the window when no field is focused.
+
+Click **Generate / Run** to validate the inputs and prepare a complete recording.
+Success replaces playback, resets speed to 1x and fits the generated sensor layout.
+Invalid values show a message without replacing the current recording. The same
+controls remain available when a file was opened. Editing values alone does not
+change playback, and the fields describe the next generated run, not metadata
+inferred from a loaded file.
+
+The headless `viewer/ProceduralRun` adapter calls `generateScenario` and
+`runProcedural` with run ID 43, writes an in-memory recording through
+`IncrementalRecording`, then decodes it with `readRecording`. Generated geometry
+passes through `writeScenarioLayout` and `readLayout`. Defaults and validation
+reuse `ProceduralConfig` and `readProceduralConfig`; there is no second generator
+or UI-owned motion model. Runs are deterministic on the same build/toolchain.
+Nothing is written to disk by Generate / Run; use the [demo CLI](demo.md) to retain
+recordings and analytics. [Generator parameters and constraints](procedural-scenarios.md).
+
 The layout is only an explicit annotation for that sample; never apply it to an
 unrelated recording. The viewer does not infer sensor configuration or truth from
-measurement positions. Without a layout it labels geometry unavailable.
+measurement positions. Without a layout the geometry count stays at zero.
 
 ## Display and controls
 
@@ -87,9 +117,15 @@ python scripts/dev.py --build-dir build/consumer-verified build --target sensor_
 python scripts/dev.py --build-dir build/consumer-verified test unit -R platform_viewer_state
 ```
 
-For a bounded graphical launch, `--frames 360 --screenshot build/viewer.png` closes
+For a bounded file-based graphical launch, `--frames 360 --screenshot build/viewer.png` closes
 after rendering 360 frames and captures the final framebuffer. This still requires
 a graphical desktop. Backward stepping works after COMPLETE and rebuilds a fresh
 viewer and fusion state by replaying the exact prefix from the beginning, including
 resets, retirements and histories. Recordings are loaded in memory; live stdin, arbitrary seeking and
 precomputed global-track JSONL input are not part of this initial viewer.
+
+For a bounded launch without a file, the wrapper requires its forwarding separator:
+`python scripts/dev.py viewer -- --frames 3 --screenshot build/viewer-controls.png`.
+The focused viewer tests also compare UI-prepared recording bytes with the existing
+run/record path, verify repeatability and both seed changes, and check input limits
+and playback navigation. Workflow tests cover file and no-file command routing.
