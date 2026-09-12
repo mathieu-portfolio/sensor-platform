@@ -53,14 +53,14 @@ measurement positions. Without a layout it labels geometry unavailable.
   and measurements, initialized sensors, active tracks and per-sensor counts.
   Per-sensor counters restart on sensor/run reset; totals span the recording.
   Large sensor lists show only the rows that fit; the total includes all sensors.
-- Space pauses/resumes; Right consumes one event and pauses; R restarts playback.
-  +/- changes speed (default 0.25x), mouse wheel zooms, left drag pans and F fits.
+- Space pauses/resumes; Left/Right steps backward/forward one event and pauses; R restarts playback.
+  +/- changes speed (default 1x), mouse wheel zooms, left drag pans and F fits.
   Escape closes. Completion holds the final frame; there is no simulation update
   or additional fusion prediction between recorded events.
 
 Playback preserves source order and relative acquisition times. Equal-time events
 are delivered together during timed playback. Run resets concatenate generation
-timelines without inventing an unknown inter-generation delay. Right-arrow stepping
+timelines without inventing an unknown inter-generation delay. Left/Right stepping
 allows inspection of individual same-time events and resets. The stable initial
 view fits observations and layout extents; pan/zoom can inspect tracks outside it.
 
@@ -89,5 +89,7 @@ python scripts/dev.py --build-dir build/consumer-verified test unit -R platform_
 
 For a bounded graphical launch, `--frames 360 --screenshot build/viewer.png` closes
 after rendering 360 frames and captures the final framebuffer. This still requires
-a graphical desktop. Recordings are loaded in memory; live stdin, seeking and
+a graphical desktop. Backward stepping works after COMPLETE and rebuilds a fresh
+viewer and fusion state by replaying the exact prefix from the beginning, including
+resets, retirements and histories. Recordings are loaded in memory; live stdin, arbitrary seeking and
 precomputed global-track JSONL input are not part of this initial viewer.

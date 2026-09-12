@@ -76,7 +76,7 @@ def run_demo(runtime, output, viewer):
                                stdout=stdout, stderr=log, check=True, timeout=120)
 
             stage("record", lambda: execute(["run", "--run-id", str(RUN_ID), "--record", recording,
-                                               "--metrics", metrics]))
+                                               "--sample-seconds", "20", "--metrics", metrics]))
             with replay.open("wb") as stream:
                 stage("replay", lambda: execute(["replay", recording], stdout=stream))
             original_events, _, normalized_hash, _ = read_unique(recording)
@@ -128,7 +128,8 @@ def run_demo(runtime, output, viewer):
                 ("Viewer executable is available.\n" if viewer.is_file() else
                  "Build the optional sensor_platform_viewer target first (see docs/viewer.md).\n") +
                 "\n```" + ("powershell" if os.name == "nt" else "sh") + "\n" +
-                viewer_command(arguments) + "\n```\n\nSpace pauses, Right steps, R restarts; wheel zooms.\n"
+                viewer_command(arguments) + "\n```\n\nPlayback starts at 1x. Space pauses, Left/Right step backward/forward (also after completion),\n"
+                "R restarts, +/- changes speed, F fits; wheel zooms and left drag pans.\n"
                 "Uses the same recording and default fusion configuration. Truth is hidden.\n",
                 encoding="utf-8")
         stage("viewer", prepare_viewer)

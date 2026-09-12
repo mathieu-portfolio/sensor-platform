@@ -29,6 +29,8 @@ int main(int argc, char** argv) {
         std::string experiment;
         sensor_platform::ObservationOptions observationOptions;
         bool hasRunId = false;
+        int sampleSeconds = 1;
+        bool hasSampleSeconds = false;
         for (int i = 2; i < argc; ++i) {
             const std::string option = argv[i];
             if (++i == argc) throw std::invalid_argument("Missing value for " + option);
@@ -40,7 +42,13 @@ int main(int argc, char** argv) {
                     throw std::invalid_argument("Expected nonnegative integer for " + option);
                 return number;
             };
-            if (option == "--experiment" && command == "run") experiment = value;
+            if (option == "--sample-seconds" && command == "run" && !hasSampleSeconds) {
+                sampleSeconds = nonnegative();
+                if (sampleSeconds < 1 || sampleSeconds > 3600)
+                    throw std::invalid_argument("--sample-seconds must be between 1 and 3600");
+                hasSampleSeconds = true;
+            }
+            else if (option == "--experiment" && command == "run") experiment = value;
             else if (option == "--metrics") observationOptions.metrics = value;
             else if (option == "--delay-ms" && command == "observe") observationOptions.delayMs = nonnegative();
             else if (option == "--pause-after" && command == "observe") observationOptions.pauseAfter = nonnegative();
@@ -53,6 +61,8 @@ int main(int argc, char** argv) {
                 hasRunId = true;
             } else throw std::invalid_argument("Unknown or duplicate option: " + option);
         }
+        if (hasSampleSeconds && !experiment.empty())
+            throw std::invalid_argument("--sample-seconds cannot be combined with --experiment");
         sensor_platform::Observation observation(observationOptions);
         sensor_platform::IncrementalRecording live(std::cout);
         if (command == "observe") {
@@ -73,7 +83,7 @@ int main(int argc, char** argv) {
                 observation.mark("produced", event.identity.streamSequence);
                 sink(event);
             };
-            if (experiment.empty()) sensor_platform::runSample(runId, measured);
+            if (experiment.empty()) sensor_platform::runSample(runId, measured, sampleSeconds);
             else sensor_platform::runExperiment(runId, experiment, measured);
         };
         if (!recordPath.empty()) {

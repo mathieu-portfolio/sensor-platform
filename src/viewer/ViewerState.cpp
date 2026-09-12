@@ -87,5 +87,12 @@ void Playback::step() {
     clock_ = due_[next_];
     state_.accept(events_[next_++]);
 }
+void Playback::stepBackward() {
+    if (next_ == 0) return;
+    const auto target = next_ - 1;
+    // Rebuild all fusion internals, counters and histories from the exact prefix.
+    restart();
+    while (next_ < target) step();
+}
 void Playback::restart() { next_ = 0; clock_ = 0; state_ = State{}; }
 }

@@ -84,6 +84,56 @@ void boundedHistoryAndRetirement() {
     state.accept({{1,0,83,11},RunFinished{}});
     check(state.histories.empty() && state.snapshot.tracks.empty(), "Retired history leaked");
 }
+void backwardPlayback() {
+    const auto events = fixture();
+    Playback playback(events);
+    playback.advance(100);
+    for (std::size_t count = events.size(); count > 0; --count) {
+        playback.stepBackward();
+        Playback reference(events);
+        for (std::size_t i = 0; i < count - 1; ++i) reference.step();
+        const auto& actual = playback.state();
+        const auto& expected = reference.state();
+        std::ostringstream a, b;
+        printGlobalTrackEvent(a, actual.snapshot, {});
+        printGlobalTrackEvent(b, expected.snapshot, {});
+        check(a.str() == b.str(), "Backward fusion snapshot differs from fresh replay");
+        check(actual.events == expected.events && actual.scans == expected.scans &&
+              actual.measurements == expected.measurements && actual.finished == expected.finished,
+              "Backward counters/finish differ");
+        check(actual.sensors.size() == expected.sensors.size() && actual.histories.size() == expected.histories.size(),
+              "Backward reset state differs");
+        for (const auto& [id, sensor] : expected.sensors) {
+            const auto& got = actual.sensors.at(id);
+            check(got.generation == sensor.generation && got.scans == sensor.scans &&
+                  got.measurements == sensor.measurements && got.latest.size() == sensor.latest.size(),
+                  "Backward sensor state differs");
+            for (std::size_t i = 0; i < sensor.latest.size(); ++i)
+                check(got.latest[i].x == sensor.latest[i].x && got.latest[i].y == sensor.latest[i].y,
+                      "Backward observation differs");
+        }
+        for (const auto& [id, history] : expected.histories) {
+            const auto& got = actual.histories.at(id);
+            check(got.size() == history.size(), "Backward history size differs");
+            for (std::size_t i = 0; i < history.size(); ++i)
+                check(got[i].x == history[i].x && got[i].y == history[i].y, "Backward history differs");
+        }
+        check(!playback.done(), "Backward from completion remained complete");
+        playback.step();
+        check(playback.state().events == count, "Forward after backward failed");
+        playback.stepBackward();
+    }
+    playback.stepBackward();
+    check(playback.state().events == 0, "Backward at start underflowed");
+    playback.advance(.5);
+    playback.stepBackward(); // Restore time zero, not the former wall clock.
+    playback.advance(.25);
+    check(playback.state().events == 3, "Backward retained stale playback clock");
+    playback.advance(.25);
+    check(playback.state().events == 4, "Timed resume after backward failed");
+    playback.advance(100);
+    check(playback.done() && playback.state().finished, "Resume did not complete");
+}
 void layoutValidation() {
     std::istringstream good("SENSOR_LAYOUT 1\n# gen id x y heading fov range\n0 1 50 20 90 60 150\n1 1 0 0 0 360 200\n");
     const auto layout = readLayout(good);
@@ -95,7 +145,7 @@ void layoutValidation() {
 }
 }
 int main() {
-    try { stateAndFusion(); playbackTiming(); boundedHistoryAndRetirement(); layoutValidation(); }
+    try { stateAndFusion(); playbackTiming(); backwardPlayback(); boundedHistoryAndRetirement(); layoutValidation(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     std::cout << "Viewer state, replay timing, fusion reuse, bounded histories and layout checks passed\n";
 }

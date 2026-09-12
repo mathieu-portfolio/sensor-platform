@@ -13,8 +13,8 @@ if necessary. It never installs dependencies, silently builds, starts Kafka or
 opens a graphical window. The wrapper selects `.venv` automatically. The optional
 viewer may be built separately following [viewer setup](viewer.md).
 
-The workflow invokes the existing default `runSample` (run ID 42, seeds 11/22/33,
-three radars at 1/2/4 Hz over simulation time 0–1 s), captures its existing production
+The workflow invokes the existing `runSample` with `--sample-seconds 20` (run ID 42, seeds 11/22/33,
+three radars at 1/2/4 Hz over simulation time 0–20 s), captures its existing production
 metrics, replays and compares normalized events, runs default platform fusion, and
 ingests the recording with the existing raw/clean quality gate. Existing run,
 sensor and fusion SQL queries then produce summaries. Finally it copies the
@@ -52,10 +52,11 @@ reported in the summary.
 
 ## Representative results and repeatability
 
-The sample produces 15 events, 10 scans and 11 measurements. Sensor scan counts
-are 2/3/5 and measurement counts 2/3/6. Fusion produces 15 source-event snapshots,
-11 associations and 2 active tracks at the end. Quality status is `passed`, with
-source and clean counts reconciled. The precise fusion details are in `fusion.csv`
+The sample produces 148 events, 143 scans and 96 measurements. Sensor scan counts
+are 21/41/81 and measurement counts 11/20/65. Fusion produces 148 source-event snapshots,
+96 associations and 0 active tracks at the end. Quality status is `passed`, with
+source and clean counts reconciled. The transit leaves sensor coverage before the
+end, showing coasting and retirement as well as movement. The precise fusion details are in `fusion.csv`
 and `summary.json` and do not claim accuracy against ground truth.
 
 Re-running the command in the same directory regenerates deterministic recordings
@@ -72,7 +73,8 @@ nonzero and marks `summary.json` failed with the stage/error; already written fi
 remain available for diagnosis. Partial files or older artifacts are not proof of
 success: check the summary status. A changed build producing different events for
 run 42 is rejected by existing ingestion identity checks; use a new output directory
-for a different version of the sample.
+for a different version of the sample. When upgrading from the old one-second demo,
+move the previous results directory aside before running the new demo.
 
 Focused validation (build explicitly before tests):
 

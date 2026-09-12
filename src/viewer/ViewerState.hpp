@@ -37,6 +37,7 @@ public:
     explicit Playback(std::vector<sensor_sandbox::StreamEvent> events);
     void advance(double seconds);
     void step();
+    void stepBackward();
     void restart();
     const State& state() const { return state_; }
     bool done() const { return next_ == events_.size(); }

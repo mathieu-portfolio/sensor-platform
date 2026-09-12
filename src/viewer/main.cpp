@@ -113,7 +113,7 @@ void draw(const Playback& playback, const std::vector<SensorGeometry>& layout, c
     label("Green confirmed / amber coast", side+20, height-78, 15, muted);
     label("Yellow tentative", side+20, height-55, 15, muted);
     DrawRectangle(0, height-46, side, 46, background);
-    label("SPACE pause   RIGHT step   R restart   +/- speed   Wheel zoom   Drag pan   F fit", 20, height-29, 15, muted);
+    label("SPACE pause   LEFT/RIGHT step   R restart   +/- speed   Wheel zoom   Drag pan   F fit", 20, height-29, 15, muted);
 }
 }
 
@@ -167,12 +167,13 @@ int main(int argc, char** argv) {
         SetWindowMinSize(1000, 700);
         SetTargetFPS(60);
         bool paused = false;
-        double speed = .25;
+        double speed = 1.;
         int frames = 0;
         while (!WindowShouldClose()) {
             if (IsKeyPressed(KEY_SPACE)) paused = !paused;
             if (IsKeyPressed(KEY_R)) playback.restart();
             if (IsKeyPressed(KEY_RIGHT)) { paused = true; playback.step(); }
+            if (IsKeyPressed(KEY_LEFT)) { paused = true; playback.stepBackward(); }
             if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) speed = std::min(16.,speed*2);
             if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) speed = std::max(.0625,speed/2);
             if (IsKeyPressed(KEY_F)) { view.pan = {}; view.zoom = 1; }

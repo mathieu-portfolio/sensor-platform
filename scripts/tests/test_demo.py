@@ -33,15 +33,17 @@ class DemoWorkflowTests(unittest.TestCase):
     def test_end_to_end_artifacts_and_idempotent_repeat(self):
         first = demo.run_demo(RUNTIME, self.output, self.viewer)
         self.assertEqual(first["status"], "passed")
-        self.assertEqual(first["counts"], dict(events=15, scans=10, measurements=11))
+        self.assertEqual(first["runs"][0]["last_event_time_seconds"], 20.0)
+        self.assertEqual([sensor["scans"] for sensor in first["sensors"]], [21, 41, 81])
+        self.assertEqual(first["counts"], dict(events=148, scans=143, measurements=96))
         self.assertEqual(first["ingestion"]["status"], "imported")
         self.assertEqual(first["ingestion"]["quality_status"], "passed")
         self.assertIn("clean_reconciliation", first["ingestion"]["checks_passed"])
         self.assertEqual(first["replay"]["status"], "matched")
-        self.assertEqual(first["fusion"]["snapshots"], 15)
-        self.assertEqual(first["fusion"]["associations"], 11)
-        self.assertEqual(first["fusion"]["final_active_tracks"], 2)
-        self.assertEqual(first["system"]["production_marks"], 15)
+        self.assertEqual(first["fusion"]["snapshots"], 148)
+        self.assertEqual(first["fusion"]["associations"], 96)
+        self.assertEqual(first["fusion"]["final_active_tracks"], 0)
+        self.assertEqual(first["system"]["production_marks"], 148)
         self.assertFalse(first["viewer"]["available"])
         for name in ("recording.events", "replayed.events", "tracks.jsonl", "production.csv", "ingestion.json",
                      "runs.csv", "sensors.csv", "fusion.csv", "sensors.layout", "viewer.md", "workflow.log", "summary.json"):

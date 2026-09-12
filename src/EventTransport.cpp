@@ -1,7 +1,7 @@
 #include "EventTransport.hpp"
 #include "RunSession.hpp"
 
-void sensor_platform::runSample(sensor_sandbox::RunId runId, const EventSink& sink) {
+void sensor_platform::runSample(sensor_sandbox::RunId runId, const EventSink& sink, int seconds) {
     using namespace sensor_sandbox;
     using sensor_platform::SensorConfig;
 
@@ -23,7 +23,7 @@ void sensor_platform::runSample(sensor_sandbox::RunId runId, const EventSink& si
     };
     sensor_platform::RunSession session(runId, {entity}, configs);
     for (const auto& event : session.start()) sink(event);
-    for (int step = 0; step <= 4; ++step) {
+    for (int step = 0; step <= seconds * 4; ++step) {
         auto batch = session.advanceTo(static_cast<float>(step) * 0.25f);
         for (const auto& event : batch) sink(event);
     }
