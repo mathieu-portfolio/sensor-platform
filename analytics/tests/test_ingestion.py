@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -65,6 +66,26 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(result["unchanged"], 1)
         self.assertEqual(result["new_runs"], 0)
         self.assertEqual(snapshot(self.dataset), before)
+
+    def test_publication_inherits_permissions_and_can_be_removed_after_retry(self):
+        mkdir = os.mkdir
+        publication_modes = []
+
+        def observe_mkdir(path, mode=0o777, *args, **kwargs):
+            if Path(path).name.startswith(".ingest-"):
+                publication_modes.append(mode)
+            return mkdir(path, mode, *args, **kwargs)
+
+        with patch("os.mkdir", side_effect=observe_mkdir):
+            ingest(self.source, self.dataset, RUNTIME)
+        # 0700 installs a private Windows ACL, even when same-user reads pass.
+        self.assertEqual(publication_modes, [0o777, 0o777])
+        before = snapshot(self.dataset)
+        self.assertEqual(ingest(self.source, self.dataset, RUNTIME)["unchanged"], 1)
+        self.assertEqual(snapshot(self.dataset), before)
+        self.assertFalse(list(self.dataset.rglob(".ingest-*")))
+        shutil.rmtree(self.dataset)
+        self.assertFalse(self.dataset.exists())
 
     def test_incremental_import_only_adds_new_run(self):
         ingest(self.inbox, self.dataset, RUNTIME)
@@ -160,6 +181,7 @@ class IngestionTests(unittest.TestCase):
                 ingest(self.source, self.dataset, RUNTIME)
         self.assertFalse(list((self.dataset / "clean").glob("run_id=*")))
         report = json.loads(next((self.dataset / "raw").glob("*/quality.json")).read_text())
+        self.assertFalse(list(self.dataset.rglob(".ingest-*")))
         self.assertEqual(report["status"], "rejected")
         self.assertEqual(report["stage"], "publication")
         self.assertIn("actual", report["error"])

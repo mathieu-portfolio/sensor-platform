@@ -2,10 +2,10 @@
 import hashlib
 import json
 from pathlib import Path
-import tempfile
 
 from .dataset import digest, materialize_run, validate_recording, verify_partition
 from .quality import CHECKS, reconcile, source_counts
+from .publication import staging_directory
 
 
 def write_json(path, value):
@@ -41,8 +41,7 @@ def ingest_recording(source, dataset, runtime):
     if not existed:
         receipt = dict(schema_version=1, recording_sha256=identity, source_name=source.name)
         raw.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix=".ingest-", dir=raw.parent) as temporary:
-            staging = Path(temporary)
+        with staging_directory(raw.parent) as staging:
             (staging / "source.events").write_bytes(original)
             write_json(staging / "manifest.json", receipt)
             write_json(staging / "quality.json", dict(schema_version=1, recording_sha256=identity,

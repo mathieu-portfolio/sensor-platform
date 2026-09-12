@@ -10,6 +10,7 @@ import duckdb
 
 from .events import read_unique
 from .quality import reconcile, source_counts
+from .publication import staging_directory
 
 SQL_DIR = Path(__file__).resolve().parent / "sql"
 TABLES = ("events", "scans", "measurements")
@@ -75,8 +76,7 @@ def materialize_run(events, source_hash, duplicates, dataset):
     dataset.mkdir(parents=True, exist_ok=True)
     # All tables are completed in an ignored staging directory, then published by one rename.
     # A failed export never exposes a partial run_id partition.
-    with tempfile.TemporaryDirectory(prefix=".ingest-", dir=dataset) as temporary:
-        staging = Path(temporary)
+    with staging_directory(dataset) as staging:
         with duckdb.connect() as connection:
             connection.execute((SQL_DIR / "schema.sql").read_text())
             rows = {table: [] for table in TABLES}
