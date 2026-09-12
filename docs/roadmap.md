@@ -1,5 +1,19 @@
 # Roadmap
 
+## Current delivery status
+
+Implemented: deterministic multi-radar source, typed recording/replay, optional
+Kafka transport, truth-free global fusion, failure/load experiments, immutable
+raw and incremental clean ingestion, the data-quality gate, Parquet/DuckDB
+analytics, the event-driven graphical viewer and the one-command demo.
+See the [current README](../README.md), [demo](demo.md), [quality gate](analytics.md)
+and [viewer](viewer.md) for runnable entry points.
+
+The numbered stages below retain original scope and historical implementation
+notes. They are not a list of wholly unimplemented features. Remaining directions
+include durable checkpoint/retention handling, controlled Release profiling and
+association improvements evaluated across multiple seeds and sampling gaps.
+
 Each stage produces a runnable or reviewable result with explicit exit criteria. Later stages are direction, not commitments to particular products or a service inventory. Keep the world authoritative and centralized throughout. The first implementation task separately authorized focused sensor-sandbox changes.
 
 ## 0. Foundation (this initialization)
@@ -90,8 +104,10 @@ summary, acquisition-time buckets, event types and measurement distribution.
 The three-radar example reconciles to 15 events, 10 scans and 11 measurements.
 Tests also cover alternate fixtures, resets and multiple run IDs.
 
-Next: broader multi-run data-quality and retention validation, then bounded
-continuous Parquet batches if workload requires them. Broker crash/checkpoint
+Raw archival, quality reports and source-to-clean count reconciliation are now
+implemented, including quarantine of rejected recordings and idempotent retries.
+Next: larger multi-run fixtures and retention validation, then bounded continuous
+Parquet batches if workload requires them. Broker crash/checkpoint
 hardening remains separate follow-up work. No new database server or orchestrator
 is needed for this local historical pipeline.
 

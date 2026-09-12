@@ -235,9 +235,10 @@ $env:SENSOR_PLATFORM_RUNTIME = 'build/Debug/sensor_platform.exe'
 .venv/Scripts/python.exe -m unittest discover -s analytics/tests -v
 ```
 
-Both local and Kafka recording/replay paths remain unchanged. Next: larger
-multi-run fixtures and data-quality/retention checks before adding continuous
-Parquet batching, more storage systems or analytics infrastructure.
+Both local and Kafka recording/replay paths remain unchanged. The ingestion
+quality gate is implemented above; the [demo](demo.md) exercises it end to end.
+Next: larger multi-run fixtures and retention checks before adding continuous
+Parquet batching or more storage systems.
 
 DuckDB references: [Parquet read/write](https://duckdb.org/docs/stable/data/parquet/overview),
 [Python client](https://duckdb.org/docs/stable/clients/python/overview).

@@ -1,8 +1,10 @@
 # Kafka development workflow
 
 The domain contract stays in sensor_core. All Kafka code, serialization and file
-I/O live in sensor-platform. There is one simulation producer process; a viewer
-and recorder use separate consumer groups to receive independent copies.
+I/O live in sensor-platform. There is one simulation producer process; a text
+consumer and recorder use separate consumer groups to receive independent copies.
+"Viewer" below names that text consumer role/group. The separate
+[graphical viewer](viewer.md) reads completed recordings, not Kafka directly.
 
 ## Build and start
 
@@ -117,5 +119,6 @@ results for this change are recorded in the architecture document.
 References: [Apache Kafka Docker setup](https://kafka.apache.org/40/getting-started/docker/),
 [librdkafka delivery and offset management](https://docs.confluent.io/platform/current/clients/librdkafka/html/md_INTRODUCTION.html).
 
-Next: controlled failure/recovery tests and durable consumer checkpoint handling,
-before adding downstream storage or analytics.
+[Controlled load/failure experiments](experiments.md) and downstream
+[raw/clean analytics](analytics.md) are implemented. Broader broker-crash tests,
+durable checkpoints and commit-batching comparisons remain future work.

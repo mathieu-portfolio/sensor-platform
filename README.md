@@ -1,115 +1,109 @@
-# radar-platform
+# sensor-platform
 
-A portfolio project exploring C++ simulation, distributed systems, event-driven architecture, and Data Engineering through a multi-radar simulation and data platform.
+A C++20 and Python platform for turning multi-radar observations into replayable events, global tracks and validated analytical datasets. It makes sensor timing, delivery failures and processing results inspectable without coupling consumers to the simulation loop.
 
-The sibling `sensor-sandbox` repository contains a working C++20/raylib simulation and the reusable `sensor_core` library. This repository now builds a small headless executable that consumes that library. The repositories remain separate.
+One deterministic source feeds local recordings or Kafka. The same events drive truth-free fusion, a graphical recording viewer and a raw-to-clean data pipeline. Controlled load and failure experiments measure latency, backlog and recovery.
 
-The intended progression is a small headless simulation boundary, independent radars observing one authoritative world, typed local events, recording/replay, and then separate processes and downstream data processing. Ground truth stays centralized. Distribution begins around sensor observations, tracking, recording, and consumers; it does not distribute world physics.
+![Recording viewer showing three sensor coverage areas, detections, fused tracks and run counters](docs/assets/platform-viewer.png)
 
-The executable advances one shared world and samples it with three independently scheduled radars at 1, 2 and 4 Hz. `MultiSensorRunner` owns one `SensorSystem` per radar and passes explicit simulation time to each. CMake adds the sibling checkout with sandbox app/tests disabled; the platform runner library links `sensor_core`. No raylib, copying, vendoring, or infrastructure is involved. Extraction into a third repository remains deferred.
+*Actual run-42 recording: 15 events, 10 scans, 11 measurements and 2 active tracks. Sensor geometry is supplied separately; ground truth is hidden. [Viewer controls](docs/viewer.md) · [Screenshot provenance](docs/assets/README.md)*
 
-Sample configuration is a C++ `std::vector<SensorConfig>` in `src/EventTransport.cpp`: sensor ID, position, heading, existing range/FOV/cadence/noise/probability parameters, and a per-sensor seed. The sample uses two noise-free radars and a third with noise, dropped returns and false returns enabled. Controlled experiments additionally accept the concrete JSON configuration described below.
+## Quick start: one-command demo
 
-## Build and run
+Prerequisites: CMake 3.20+, a C++20 compiler, Python 3.11+, and the sibling `sensor-sandbox` checkout containing the `sensor_core` CMake target:
 
-For a reproducible recording → replay → fusion → quality-checked analytics demo,
-see [the single-command demo](docs/demo.md). It also prepares graphical viewer inputs.
-
-Requires CMake 3.20+, a C++20 compiler, and `../sensor-sandbox` containing the reusable core target. The developer CLI uses Python; use Python 3.11+ for the data tooling. Run from this repository:
-
-```sh
-python scripts/dev.py build
-python scripts/dev.py test unit
-python scripts/dev.py run
+```text
+workspace/
+  sensor-platform/   # this repository: runtime, transport, fusion, data and viewer
+  sensor-sandbox/    # source dependency providing sensor_core
 ```
 
-The stdlib wrapper uses existing CMake/CTest commands and selects the executable path for the generator. See [Developer commands](docs/development.md) for build-directory overrides, focused test groups and data/Kafka commands. Direct CMake and runtime commands remain available. Over 0 through 1 second, inclusive, sensors 1/2/3 produce 2/3/5 scans. The typed output includes run/sensor lifecycle records and complete scan records with identities, acquisition timestamps and measurement tuples. World X advances from 100 to 110 once across the run, regardless of sensor count. Tests cover schedules, shared-world motion, independent reset, seeded repeatability, sensor reorder/removal, invalid inputs and the executable output.
-
-The runner samples at caller-provided timestamps (0.25-second steps in the sample). A late poll observes the current world once and schedules from that time; it does not reconstruct missed scans. Resetting one sensor restarts only its local sequence/deadline, retaining its seed. The shared clock and world continue. Sequence and detection IDs are local to a sensor between resets; they are not durable identifiers across resets. RunSession now wraps these local identities in explicit run/sensor generations and a global event sequence.
-
-Record and replay the same sample:
-
-```sh
-python scripts/dev.py record build/sample.events --run-id 42
-python scripts/dev.py replay build/sample.events
-```
-
-The runtime with no arguments still runs the live sample. Live stdout, the recorded file, and replay
-stdout contain the same ordered typed records (apart from OS line endings).
-Recording replaces the specified file. Replay validates the complete file before
-output; it never reruns the simulation. The inspectable versioned text format,
-identity rules and limits are documented in [Event recording](docs/event-recording.md).
-Kafka producer, consumer and incremental recorder processes are now available as an optional build. See [Kafka development](docs/kafka.md) for build/start commands, ordering and restart semantics.
-
-Local live recording now writes and flushes events as they arrive; it no longer
-buffers the complete run. Replay still validates the complete file before output.
-The optional topology is simulation producer -> one-partition Kafka run topic ->
-independent viewer and recorder groups. The existing local commands stay Kafka-free.
-
-## Recording viewer
-
-An optional [event-driven graphical viewer](docs/viewer.md) replays existing
-recordings with detections, fused tracks, short histories and optional sensor
-geometry. Its raylib dependency is isolated from the headless runtime.
-
-## Historical analytics
-
-Local or Kafka-produced recordings can now be exported to immutable per-run
-Parquet datasets and queried with DuckDB. Python tooling lives in `analytics/`;
-the C++ runtime and sensor_core retain no analytics dependency.
+From this repository, create the Python environment and install the analytics dependency. Windows commands are shown; on Linux/macOS replace `.venv/Scripts/python.exe` with `.venv/bin/python`:
 
 ```sh
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r analytics/requirements.txt
-python scripts/dev.py analytics export build/sample.events data
-python scripts/dev.py analytics query data --sql analytics/sql/sensor_summary.sql
+python scripts/dev.py --build-dir build/demo build --target sensor_platform
+python scripts/dev.py --build-dir build/demo demo
 ```
 
-The dataset keeps separate event, scan and measurement tables, so empty scans
-remain visible. Identical retries are no-ops; conflicting event/run identities
-fail. The sample produces 10 scan rows and 11 measurement rows across three sensors.
-See [Historical analytics](docs/analytics.md) for schema, layout, duplicate rules,
-test commands and measured SQL results.
-
-For incremental imports, use `python scripts/dev.py analytics ingest recordings/ data/history`,
-then query `data/history/clean`. Original recordings are archived under `raw/`;
-known imports are skipped and only new clean runs are added.
-
-## Load and failure experiments
-
-Run repeatable baseline, increased-load, consumer-pause, delayed-consumer and
-sensor-outage scenarios over local pipes or Kafka. Results include throughput,
-wall-clock latency percentiles, backlog/recovery, integrity checks and per-sensor
-counts; simulation timestamps remain separate.
+For any configured build directory, the entry point is:
 
 ```sh
-python scripts/dev.py experiments run experiments/configs/pause.json build/experiments/local-pause
-python scripts/dev.py experiments report build/experiments
+python scripts/dev.py --build-dir <build> demo
 ```
 
-Add `--transport kafka` with a running local broker and Kafka-enabled binaries.
-See [Experiments and performance](docs/experiments.md) for configuration, metric
-definitions, actual measurements, Kafka setup and test commands.
+The demo records the seeded three-radar sample, verifies replay equivalence, runs fusion, ingests through the quality gate, executes existing SQL summaries and prepares viewer inputs. Results go to **`demo/results/`**: start with `summary.json`, the CSV summaries and `viewer.md`. Repeating the command produces the same recording and returns ingestion status `unchanged`.
 
-## Global tracking and fusion
+Kafka and raylib are optional; neither is required for the demo. To open the recording graphically, [build the viewer](docs/viewer.md) and use the command in `demo/results/viewer.md`. Dependencies and builds are explicit, never implicit side effects of running the demo. [Full artifact list and repeatability](docs/demo.md) · [Developer commands](docs/development.md)
 
-The platform associates world-space radar observations into global tracks using
-deterministic distance-gated nearest neighbours, simple velocity prediction, and
-time-based confirmation/coasting/expiry. Multiple sensors contribute to one track.
-Runtime inputs and outputs contain no evaluation truth.
+## Architecture
 
-```sh
-python scripts/dev.py fuse build/sample.events --output build/tracks.jsonl
-python scripts/dev.py analytics tracks build/tracks.jsonl
-python scripts/dev.py evaluation demo build/fusion-evaluation
+```mermaid
+flowchart LR
+    Core["sensor_core / sibling dependency"] -.-> Source["C++ multi-radar source"]
+    Source --> Events["Typed measurement and lifecycle events"]
+    Events --> Recording["Recording / validated replay"]
+    Events --> Kafka["Optional Kafka transport"]
+    Kafka --> Recorder["Recorder consumer"]
+    Recorder --> Recording
+    Recording --> Fusion["Truth-free fusion / global-track JSONL"]
+    Recording --> Viewer["Optional raylib viewer / reuses fusion"]
+    Recording --> Raw["Immutable raw recording bytes"]
+    Raw --> Quality["Validation and count reconciliation"]
+    Quality -->|pass| Clean["Immutable clean Parquet partitions"]
+    Quality -->|reject| Report["Raw retained / failure report"]
+    Clean --> SQL["DuckDB / SQL summaries"]
 ```
 
-See [Fusion](docs/fusion.md) for the JSON Lines contract, streaming input, separate
-evaluation metrics and crossing/false-return limitations of this baseline.
+`sensor-platform` owns orchestration, recording, transport, fusion and data tooling. It consumes `sensor_core` through CMake `add_subdirectory` from the sibling checkout, with sandbox app/tests disabled. It does not copy the sandbox application. The headless targets have no raylib dependency; the viewer consumes recorded events and never advances the simulation. [Architecture and implementation history](docs/architecture.md)
 
-Override the sibling location with `-DSENSOR_SANDBOX_SOURCE_DIR=/path/to/sensor-sandbox`. The build consumes that checkout's current sources; it does not pin a Git revision or modify its build directory.
+## Engineering capabilities
 
-- [Architecture](docs/architecture.md): observed implementation, coupling, reuse options, and proposed boundaries.
-- [Roadmap](docs/roadmap.md): incremental scope and measurable exit criteria, beginning with a small domain boundary milestone.
+- **Deterministic multi-radar source:** one authoritative world, independent seeded scanners and explicit acquisition times. Empty scans differ from not-due polls. [Timing and identity contract](docs/event-recording.md)
+- **Typed events and replay:** run/sensor generations, contiguous global sequences, complete-run validation and exact measurement-field round trips. Optional **Kafka transport** adds independent consumers, acknowledged publishing and tested restart/reconstruction behavior. [Kafka semantics](docs/kafka.md)
+- **Truth-free multi-sensor fusion:** distance-gated association, velocity prediction, confirmation, coasting and expiry. Evaluation truth is separate from runtime inputs and outputs. [Fusion and evaluation](docs/fusion.md)
+- **Incremental, idempotent ingestion:** immutable raw bytes, immutable per-run clean partitions, conflict rejection and recovery after interrupted conversion. The **quality gate** checks lifecycle, sequences, acquisition times, identities and counts, then reconciles persisted rows before publication. Rejected sources stay in raw storage with diagnostics. **Parquet/DuckDB** preserves separate event, scan and measurement tables. [Data pipeline and quality reports](docs/analytics.md)
+- **Observable processing:** load, pause, delayed-consumer and sensor-outage experiments retain evidence and measure latency/backlog/recovery. The **event-driven viewer** shows detections, fused tracks, short histories and counters, with optional sensor geometry. [Experiments](docs/experiments.md) · [Viewer](docs/viewer.md)
 
-Local checkout note: this foundation was initialized in the existing `sensor-platform/` directory next to `sensor-sandbox/`. The project name is `radar-platform`; renaming the checkout is optional and does not change the design.
+## Representative measured results
+
+These are recorded development results, not capacity guarantees. Transport runs were measured on **2026-09-11, Windows 11, MSVC Debug, same-host Kafka 4.0.0/Java 21**, without warm-up or tuning. Latency includes startup, queueing, processing and output flushes. Fusion evaluation uses seed 42 and default settings; RMSE is in world units.
+
+| Workload | Observed result | Evidence |
+| --- | --- | --- |
+| Three-radar demo, 1 simulated second | 15 events, 10 scans, 11 measurements; 2 final tracks; quality passed | [Demo](docs/demo.md) |
+| Fusion, three sensors at 2/4/8 Hz | Position RMSE 0.0080; 1 missed sample of 65; 0 ID switches | [Evaluation](docs/fusion.md) |
+| Fusion, sparse close crossing | Position RMSE 0.0372 but 2 ID switches | [Known association limit](docs/fusion.md) |
+| Local load, 16 sensors at 40 Hz | 1,314 events; 653.67 consumed/s; p95 1.30 ms; peak backlog 14 | [Load comparison](docs/experiments.md) |
+| Same load over Kafka | 63.11 consumed/s; p95 18,765.65 ms; peak backlog 1,243 | [Bottleneck evidence](docs/experiments.md) |
+| One-second consumer pause | Local/Kafka catch-up: 0.004/0.848 s; peak backlog: 29/42 | [Recovery measurements](docs/experiments.md) |
+
+All ten recorded transport/scenario runs finished with zero missing, duplicate, conflicting or out-of-order events, matching payloads and zero final backlog. The Kafka load result exposes the current consumer bottleneck; synchronous per-event commits and instrumentation are possible contributors, not isolated causes.
+
+## Project structure
+
+| Path | Responsibility |
+| --- | --- |
+| [`src/`](src/) | C++ runner, event recording, Kafka adapter and global fusion |
+| [`src/viewer/`](src/viewer/) | Optional graphical consumer and headless viewer state |
+| [`analytics/`](analytics/) | Ingestion, quality reports, Parquet materialization and SQL |
+| [`experiments/`](experiments/) | Controlled transport/load/failure scenarios and reports |
+| [`evaluation/`](evaluation/) | Separate truth-based fusion fixtures and metrics |
+| [`scripts/`](scripts/) · [`tools/`](tools/) | Developer/demo orchestration and integration validation |
+| [`tests/`](tests/) · [`docs/`](docs/) | Focused C++ tests and detailed technical documentation |
+
+## Design decisions and trade-offs
+
+- **Centralized world, independent consumers.** Distribution begins at observations; rendering and wall-clock backpressure do not change simulation timestamps. Late polls observe current state once rather than invent missed historical scans.
+- **Explicit ordering over broad distribution.** Kafka uses one retained partition per run. Consumers commit after output; crash windows can repeat visible events. This is not end-to-end exactly-once delivery.
+- **Immutable publication over updates.** Clean runs publish by staging-directory rename. Identical typed duplicates normalize away; conflicting run identities fail. Raw and clean publication are separate operations, with retry recovery.
+- **Small, inspectable baseline.** Local C++ and Python tools reuse decoding, validation, fusion and SQL. The sibling dependency is its current working tree, not a pinned package; set `SENSOR_SANDBOX_SOURCE_DIR` to override its location.
+
+## Limitations and next steps
+
+Recordings and analytics are batch-loaded in memory; ingestion assumes one writer and local storage. Quality checks establish structural consistency, not physical plausibility or sensor calibration. The viewer reads complete recordings and uses a display-only layout because v1 events lack sensor pose/FOV metadata.
+
+Nearest-neighbour fusion can swap crossing identities and confirm persistent false returns. Determinism is scoped to the same inputs/build/numeric environment. Transport measurements are single-host development observations, not a distributed benchmark. There is no cloud deployment or continuous Kafka-to-Parquet service.
+
+Useful next work: controlled Release-build profiling and commit-batching/restart tests; association comparisons across seeds and sampling gaps; larger datasets, retention and durable checkpoints. See the [roadmap and shipped milestones](docs/roadmap.md).

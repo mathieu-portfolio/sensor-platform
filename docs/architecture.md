@@ -2,7 +2,16 @@
 
 ## Status and evidence
 
-This document separates observations from proposals. sensor-platform now builds a headless C++ consumer of the sibling sensor-sandbox core. Earlier implementation sections record historical milestones; the original inspection sections describe the baseline revision, not the updated build/API.
+sensor-platform owns the multi-radar runtime, typed recording/replay, optional
+Kafka transport, truth-free fusion, raw/clean ingestion with quality validation,
+DuckDB analytics, experiments and an optional event-driven graphical viewer.
+The [README](../README.md) describes the current system and the
+[demo](demo.md) connects the implemented paths in one command.
+
+This document also retains implementation history and original proposals. The
+"First boundary implementation" and later sections describe earlier revisions
+of the sibling core, not the current platform feature set. Read their deferred
+work and test totals in that historical context.
 
 ## Reusable core and platform consumer
 
@@ -51,8 +60,9 @@ Crashes can duplicate visible output; file writes and commits are not atomic.
 
 See [Kafka development](kafka.md) for exact commands, group restrictions,
 retention requirements and the integration validation script. Replay still
-rejects incomplete/malformed files before emitting anything. Next is controlled
-failure/recovery and durable consumer checkpoint handling.
+rejects incomplete/malformed files before emitting anything. Controlled
+[load/failure experiments](experiments.md) are implemented; broader broker-crash
+coverage and durable consumer checkpoint hardening remain future work.
 
 Validation on Windows/MSVC: 61 headless and 66 app-enabled sandbox tests passed,
 including the interactive build; all three platform suites passed in local and
@@ -80,8 +90,14 @@ evaluation truth. See [Historical analytics](analytics.md) for schema and comman
 The representative run reconciles to 15 events, 10 scans and 11 measurements.
 Tests cover field precision, multiple runs/sensors/generations, empty/no scans,
 query correctness, duplicate/conflict behavior and malformed/corrupt data.
-Next: larger multi-run fixtures and historical data-quality/retention validation
-before continuous Parquet batching or additional services.
+Incremental ingestion now archives original bytes before validation and preserves
+rejected sources with `quality.json` diagnostics. Clean publication reconciles
+event/scan/measurement counts against the validated source; repeat imports are
+idempotent. Larger datasets, retention and continuous batching remain future work.
+
+The [graphical viewer](viewer.md) consumes validated recordings through existing
+fusion, with raylib linked only to its executable. The [curated demo](demo.md)
+orchestrates recording, replay, fusion, ingestion, summaries and viewer inputs.
 
 ## Controlled experiments
 
