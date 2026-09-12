@@ -216,9 +216,44 @@ void proceduralControlsAndRun() {
         rejects([&] { fields.config(); });
     }
 }
+void regenerationPreservesSpeed() {
+    ProceduralConfig config;
+    config.durationSeconds = 4;
+    const auto generated = prepareProceduralRecording(config);
+    Playback fresh(generated.events);
+    fresh.advance(0);
+    for (const double speed : {.25, 4.}) {
+        PlaybackSession session;
+        session.playback.emplace(fixture());
+        session.playback->advance(100);
+        check(session.playback->done() && !session.playback->state().histories.empty(), "Missing old run state");
+        session.speed = speed;
+        session.paused = true;
+        session.replaceRecording(generated.events);
+        check(session.speed == speed && !session.paused, "Regeneration changed speed or failed to resume");
+        const auto& actual = session.playback->state();
+        const auto& expected = fresh.state();
+        check(actual.source.timeSeconds == 0 && !session.playback->done() && !actual.finished,
+              "Regeneration retained old playback position");
+        check(actual.events == expected.events && actual.scans == expected.scans &&
+              actual.measurements == expected.measurements && actual.sensors.size() == expected.sensors.size(),
+              "Regeneration retained old counters/sensors");
+        std::ostringstream a, b;
+        printGlobalTrackEvent(a, actual.snapshot, {});
+        printGlobalTrackEvent(b, expected.snapshot, {});
+        check(a.str() == b.str() && actual.histories.size() == expected.histories.size(), "Regeneration retained old tracks");
+        for (const auto& [id, history] : expected.histories)
+            check(actual.histories.at(id).size() == history.size(), "Regeneration retained old history");
+        Playback timedReference(generated.events);
+        timedReference.advance(.125 * speed);
+        session.playback->advance(.125 * session.speed);
+        check(session.playback->state().events == timedReference.state().events,
+              "Regeneration retained old playback clock");
+    }
+}
 }
 int main() {
-    try { stateAndFusion(); playbackTiming(); backwardPlayback(); boundedHistoryAndRetirement(); layoutValidation(); proceduralControlsAndRun(); }
+    try { stateAndFusion(); playbackTiming(); backwardPlayback(); boundedHistoryAndRetirement(); layoutValidation(); proceduralControlsAndRun(); regenerationPreservesSpeed(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     std::cout << "Viewer state, replay, fusion, layout and procedural controls checks passed\n";
 }

@@ -95,4 +95,11 @@ void Playback::stepBackward() {
     while (next_ < target) step();
 }
 void Playback::restart() { next_ = 0; clock_ = 0; state_ = State{}; }
+
+void PlaybackSession::replaceRecording(std::vector<StreamEvent> events) {
+    Playback next(std::move(events));
+    next.advance(0);
+    playback = std::move(next);
+    paused = false;
+}
 }

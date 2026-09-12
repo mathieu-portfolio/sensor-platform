@@ -57,7 +57,7 @@ inactive while editing. F11 toggles fullscreen even while editing; Escape leaves
 fullscreen first, otherwise it closes the window when no field is focused.
 
 Click **Generate / Run** to validate the inputs and prepare a complete recording.
-Success replaces all playback state and histories, starts at time zero at 1x,
+Success replaces all playback state and histories, starts at time zero at the current playback speed,
 and fits the generated sensor layout with zoom and pan reset. Preparation time is
 excluded from playback time. Configuration values remain unchanged in the controls.
 Invalid values show a message without replacing the current recording. The same

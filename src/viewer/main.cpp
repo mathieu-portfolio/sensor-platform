@@ -278,7 +278,8 @@ int main(int argc, char** argv) {
                     throw std::invalid_argument("--frames must be positive");
             } else throw std::invalid_argument("Unknown option: " + option);
         }
-        std::optional<Playback> playback;
+        PlaybackSession session;
+        auto& playback = session.playback;
         std::vector<SensorGeometry> layout;
         std::vector<sensor_sandbox::StreamEvent> events;
         if (!recordingPath.empty()) {
@@ -303,8 +304,8 @@ int main(int argc, char** argv) {
         SetExitKey(KEY_NULL); // Handle fullscreen and field focus before closing.
         SetTargetFPS(60);
         WindowState window;
-        bool paused = false;
-        double speed = 1.;
+        auto& paused = session.paused;
+        auto& speed = session.speed;
         double lastTick = GetTime();
         int frames = 0;
         while (!WindowShouldClose()) {
@@ -324,13 +325,9 @@ int main(int argc, char** argv) {
                     const auto config = controls.fields.config();
                     auto prepared = prepareProceduralRecording(config);
                     auto nextView = fit(prepared.events, prepared.layout);
-                    Playback nextPlayback(std::move(prepared.events));
-                    nextPlayback.advance(0);
-                    playback = std::move(nextPlayback);
+                    session.replaceRecording(std::move(prepared.events));
                     layout = std::move(prepared.layout);
                     view = nextView;
-                    paused = false;
-                    speed = 1;
                     regenerated = true;
                     controls.error.clear();
                     std::cout << "Generated procedural recording: scenario seed=" << config.scenarioSeed

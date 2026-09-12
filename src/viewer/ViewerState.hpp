@@ -2,6 +2,7 @@
 #include "Fusion.hpp"
 #include <deque>
 #include <istream>
+#include <optional>
 
 namespace sensor_platform::viewer {
 struct SensorGeometry {
@@ -48,5 +49,13 @@ private:
     std::size_t next_{};
     double clock_{};
     State state_;
+};
+
+struct PlaybackSession {
+    std::optional<Playback> playback;
+    bool paused{};
+    double speed{1};
+    // Replace run-owned state, retaining the user's playback rate.
+    void replaceRecording(std::vector<sensor_sandbox::StreamEvent> events);
 };
 }
