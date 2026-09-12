@@ -9,6 +9,7 @@ import tempfile
 import duckdb
 
 from .events import read_unique
+from .quality import reconcile, source_counts
 
 SQL_DIR = Path(__file__).resolve().parent / "sql"
 TABLES = ("events", "scans", "measurements")
@@ -29,6 +30,7 @@ def verify_partition(partition):
     for table in TABLES:
         if digest(partition / f"{table}.parquet") != manifest["files"][table]:
             raise ValueError(f"dataset file integrity check failed: {partition}/{table}.parquet")
+    reconcile(partition, manifest["rows"])
     return manifest
 
 
@@ -57,12 +59,14 @@ def materialize_run(events, source_hash, duplicates, dataset):
     """Publish an already validated run using the existing immutable partition rules."""
     dataset = Path(dataset)
     run_id = events[0].run_id
+    expected = source_counts(events)
     destination = dataset / f"run_id={run_id}"
 
     def existing():
         manifest = verify_partition(destination)
         if manifest["source_sha256"] != source_hash:
             raise ValueError(f"run {run_id} already exists with different events; assign a new run ID")
+        reconcile(destination, expected)
         return {"status": "unchanged", "run_id": run_id, "duplicates_removed": duplicates,
                 "rows": manifest["rows"]}
 
@@ -88,12 +92,13 @@ def materialize_run(events, source_hash, duplicates, dataset):
                     connection.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows[table])
                 connection.table(table).order("run_id, stream_sequence").write_parquet(
                     str(staging / f"{table}.parquet"), compression="zstd")
+        actual = reconcile(staging, expected)
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "recording_version": 1,
             "run_id": run_id,
             "source_sha256": source_hash,
-            "rows": {table: len(rows[table]) for table in TABLES},
+            "rows": actual,
             "files": {table: digest(staging / f"{table}.parquet") for table in TABLES},
         }
         (staging / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

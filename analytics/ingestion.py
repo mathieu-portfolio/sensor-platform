@@ -4,7 +4,14 @@ import json
 from pathlib import Path
 import tempfile
 
-from .dataset import digest, export_run, materialize_run, validate_recording, verify_partition
+from .dataset import digest, materialize_run, validate_recording, verify_partition
+from .quality import CHECKS, reconcile, source_counts
+
+
+def write_json(path, value):
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
 
 
 def clean_partition(dataset, receipt):
@@ -30,33 +37,50 @@ def ingest_recording(source, dataset, runtime):
     original = source.read_bytes()
     identity = hashlib.sha256(original).hexdigest()
     raw = dataset / "raw" / f"sha256={identity}"
-    if raw.exists():
-        receipt = raw_receipt(raw, identity)
+    existed = raw.exists()
+    if not existed:
+        receipt = dict(schema_version=1, recording_sha256=identity, source_name=source.name)
+        raw.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=".ingest-", dir=raw.parent) as temporary:
+            staging = Path(temporary)
+            (staging / "source.events").write_bytes(original)
+            write_json(staging / "manifest.json", receipt)
+            write_json(staging / "quality.json", dict(schema_version=1, recording_sha256=identity,
+                                                      status="pending", stage="validation"))
+            staging.rename(raw)
+    receipt = raw_receipt(raw, identity)
+    report_path = raw / "quality.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() else {}
+    if report.get("status") == "rejected":
+        raise ValueError(report["error"])
+    if report.get("status") == "passed":
         manifest = clean_partition(dataset, receipt)
         if manifest is not None:
+            reconcile(dataset / "clean" / f"run_id={receipt['run_id']}", report["source_rows"])
             return dict(status="unchanged", recording_sha256=identity, run_id=receipt["run_id"], rows=manifest["rows"])
-        # A previous ingestion may have stopped after archival but before clean publication.
-        result = export_run(raw / "source.events", dataset / "clean", runtime)
-        return dict(status="recovered", recording_sha256=identity, run_id=result["run_id"], rows=result["rows"])
 
-    with tempfile.TemporaryDirectory(prefix="sensor-ingest-validate-") as temporary:
-        snapshot = Path(temporary) / "source.events"
-        snapshot.write_bytes(original)
-        events, normalized_hash, duplicates = validate_recording(snapshot, runtime)
-    receipt = dict(schema_version=1, recording_sha256=identity, normalized_sha256=normalized_hash,
-                   run_id=events[0].run_id, source_name=source.name, duplicates_removed=duplicates)
-    # Reject conflicting logical runs before archiving a new raw recording.
-    clean_partition(dataset, receipt)
-    raw.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".ingest-", dir=raw.parent) as temporary:
-        staging = Path(temporary)
-        (staging / "source.events").write_bytes(original)
-        (staging / "manifest.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
-        staging.rename(raw)
-    # Raw is published before clean becomes visible. A retry can finish interrupted conversion.
-    result = materialize_run(events, normalized_hash, duplicates, dataset / "clean")
-    return dict(status="imported" if result["status"] == "created" else "archived",
-                recording_sha256=identity, run_id=result["run_id"], rows=result["rows"])
+    report = dict(schema_version=1, recording_sha256=identity, status="pending", stage="validation")
+    try:
+        events, normalized_hash, duplicates = validate_recording(raw / "source.events", runtime)
+        receipt.update(normalized_sha256=normalized_hash, run_id=events[0].run_id,
+                       duplicates_removed=duplicates)
+        write_json(raw / "manifest.json", receipt)
+        report.update(run_id=events[0].run_id, normalized_sha256=normalized_hash,
+                      duplicates_removed=duplicates, checks_passed=CHECKS,
+                      source_rows=source_counts(events), stage="publication")
+        write_json(report_path, report)
+        result = materialize_run(events, normalized_hash, duplicates, dataset / "clean")
+        report.update(status="passed", stage="complete", clean_rows=result["rows"],
+                      checks_passed=CHECKS + ["clean_reconciliation"])
+        write_json(report_path, report)
+    except Exception as error:
+        # Data errors are quarantined; infrastructure failures remain retryable.
+        report.update(status="rejected" if isinstance(error, ValueError) else "error",
+                      error=str(error), error_type=type(error).__name__)
+        write_json(report_path, report)
+        raise
+    status = "recovered" if existed else ("imported" if result["status"] == "created" else "archived")
+    return dict(status=status, recording_sha256=identity, run_id=result["run_id"], rows=result["rows"])
 
 
 def ingest(source, dataset, runtime):

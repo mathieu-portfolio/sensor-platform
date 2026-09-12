@@ -57,6 +57,7 @@ data/history/
     sha256=<original-byte-hash>/
       source.events
       manifest.json
+      quality.json
   clean/
     run_id=42/
       events.parquet
@@ -66,8 +67,9 @@ data/history/
 ```
 
 Raw stores the exact snapshotted source bytes, including line endings, numeric
-spelling and identical duplicate events. Input is validated using the existing
-normalization/duplicate policy and C++ replay validator before archival. Thus raw
+spelling and identical duplicate events. Archival happens before validation,
+including for malformed or conflicting recordings. Validation uses the existing
+normalization/duplicate policy and C++ replay validator. Thus raw
 files containing repeated events may need normalization before direct replay.
 Raw manifests record original SHA-256, normalized-stream SHA-256, run ID, first
 source filename and duplicate count. Filenames/paths are not import identities:
@@ -78,7 +80,7 @@ then skip parsing, runtime validation and Parquet conversion. New byte hashes ar
 validated; only absent clean runs are materialized. Equivalent logical streams
 with different bytes receive separate raw archives but share the unchanged clean
 run. Conflicting event payloads or different normalized streams under an existing
-run ID fail before new archival; no existing data is overwritten. Existing clean
+run ID are rejected after archival; no existing clean data is overwritten. Existing clean
 partitions are never rebuilt to add another run. Checksums still require reading
 the selected files; this is not a timestamp-only file discovery cache.
 
@@ -89,7 +91,44 @@ retrying the source rebuilds only that missing clean run from archived bytes.
 Earlier successful inbox entries remain imported when a later entry fails.
 Integrity failures are reported rather than overwritten; there is no power-loss
 durability or concurrent-writer guarantee. No mutable central registry is needed:
-the raw manifest and matching clean manifest identify a completed import.
+the raw manifest, quality report and matching clean manifest identify a completed import.
+
+### Ingestion quality gate
+
+Each raw archive contains a compact version-1 `quality.json`, keyed by original
+SHA-256. It records `status` (`pending`, `passed`, `rejected`, or retryable `error`),
+`stage`, and, after source validation, run ID, normalized SHA-256, duplicate count,
+passed checks and source event/scan/measurement counts. Successful reports also
+contain reconciled clean counts. Failures retain the exception type and diagnostic
+in `error_type` and `error`, including parser line numbers or replay diagnostics.
+Validation stops at the first failure; it does not enumerate every defect.
+
+The gate enforces a complete single nonzero run lifecycle, contiguous global
+sequences starting at one, valid run/sensor generation transitions, initialized
+sensors and contiguous scan sequences per sensor generation. Times must be finite,
+nonnegative and nondecreasing within each run generation; run resets restart time
+at zero. Detection identities must be contiguous per sensor generation, values
+must satisfy the recording contract, and declared measurement counts must match
+the encoded tuples. Identical typed event duplicates are counted and removed;
+conflicting identities fail. These rules remain authoritative in the replay validator.
+
+Before the staging directory is published, ingestion reads the actual Parquet
+files and compares all three row counts against the validated source, checks
+event-to-scan counts and checks measurement counts for every scan (including empty
+scans). Reimports verify file hashes and reconcile counts again. A successful
+byte-identical reimport leaves the files and quality report unchanged.
+
+Quarantine is logical: rejected bytes and their report stay under `raw/`; no new
+`clean/run_id=...` partition is published. Existing valid runs are preserved when
+a conflicting recording is rejected. The CLI raises an error and stops the inbox
+batch at that recording. Repeating a rejected byte hash returns the saved failure.
+Infrastructure failures are recorded as `error` and can be retried. Reports are
+replaced atomically as processing advances; they are not an attempt history.
+Archives created before quality reports existed are validated on their next import.
+
+This gate checks recording structure and clean row consistency, not physical
+plausibility, expected sensor coverage/rate, clock accuracy, or statistical drift.
+Count reconciliation is not a field-by-field comparison of every Parquet value.
 
 Queries continue to use the same tables and SQL; point them explicitly at `clean/`.
 Existing direct-export datasets are not moved or migrated automatically.
