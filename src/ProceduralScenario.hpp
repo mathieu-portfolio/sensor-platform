@@ -45,7 +45,11 @@ struct GeneratedScenario {
 ProceduralConfig readProceduralConfig(std::istream& input);
 GeneratedScenario generateScenario(const ProceduralConfig& config);
 void writeScenarioLayout(std::ostream& output, const GeneratedScenario& scenario);
-void runProcedural(sensor_sandbox::RunId runId, const GeneratedScenario& scenario, const EventSink& sink);
+void writeAnalysisMetadata(std::ostream& runs, std::ostream& sensors,
+                           sensor_sandbox::RunId runId, const GeneratedScenario& scenario);
+// Optional offline artifact only; never passed to an EventSink or recording encoder.
+void runProcedural(sensor_sandbox::RunId runId, const GeneratedScenario& scenario, const EventSink& sink,
+                   std::ostream* truth = nullptr);
 // Absolute-time execution of the core's generated path descriptors. Unmanaged
 // entities retain the runner's existing core constant-velocity/bounce behavior.
 void updateProceduralMotion(sensor_sandbox::WorldState& world, float timeSeconds);

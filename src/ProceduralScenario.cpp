@@ -217,12 +217,52 @@ void writeScenarioLayout(std::ostream& output, const GeneratedScenario& scenario
     if (!output) throw std::runtime_error("Cannot write generated sensor layout");
 }
 
-void runProcedural(RunId runId, const GeneratedScenario& scenario, const EventSink& sink) {
+void writeAnalysisMetadata(std::ostream& runs, std::ostream& sensors, RunId runId, const GeneratedScenario& scenario) {
+    for (auto* output : {&runs, &sensors}) {
+        output->imbue(std::locale::classic());
+        *output << std::setprecision(std::numeric_limits<float>::max_digits10);
+    }
+    const auto& c = scenario.config;
+    runs << "run_id,generator_version,scenario_seed,layout_seed,duration_seconds,target_count,sensor_count,tick_hz,"
+            "speed_min,speed_max,maneuver,convergence,spawn_spread,coverage,layout_spread,noise,reliability,clutter\n"
+         << runId << ",procedural-v1," << c.scenarioSeed << ',' << c.layoutSeed << ',' << c.durationSeconds
+         << ',' << c.targetCount << ',' << c.sensorCount << ',' << tickHz;
+    for (const auto& parameter : proceduralParameters) runs << ',' << c.*(parameter.member);
+    runs << '\n';
+    sensors << "run_id,sensor_id,seed,x,y,heading_radians,field_of_view_radians,range,refresh_rate_hz,range_noise,detection_probability,false_positive_rate_hz\n";
+    for (const auto& s : scenario.sensors) {
+        const auto& d = s.definition;
+        sensors << runId << ',' << s.id << ',' << s.seed << ',' << s.position.x << ',' << s.position.y
+                << ',' << s.headingRadians << ',' << d.fieldOfViewRadians << ',' << d.range << ','
+                << d.refreshRateHz << ',' << d.rangeNoise << ',' << d.detectionProbability << ',' << d.falsePositiveRateHz << '\n';
+    }
+    if (!runs || !sensors) throw std::runtime_error("Cannot write analytical metadata");
+}
+
+void runProcedural(RunId runId, const GeneratedScenario& scenario, const EventSink& sink, std::ostream* truth) {
     validate(scenario.config);
     RunSession session(runId, scenario.entities, scenario.sensors);
     for (const auto& event : session.start()) sink(event);
-    for (int tick = 0; tick <= scenario.config.durationSeconds * tickHz; ++tick)
-        for (const auto& event : session.advanceTo(static_cast<float>(tick) / tickHz)) sink(event);
+    if (truth) {
+        truth->imbue(std::locale::classic());
+        *truth << std::setprecision(std::numeric_limits<float>::max_digits10)
+               << "run_id,target_id,timestamp,x,y,vx,vy,motion_type\n";
+    }
+    for (int tick = 0; tick <= scenario.config.durationSeconds * tickHz; ++tick) {
+        const float time = static_cast<float>(tick) / tickHz;
+        for (const auto& event : session.advanceTo(time)) sink(event);
+        if (truth) for (auto entity : scenario.entities) {
+            // The same absolute-time motion function used by the simulation.
+            positionAt(entity, time);
+            const char* motion = "linear";
+            if (entity.scenarioMotion == ScenarioPathMotion::Arc) motion = "arc";
+            else if (entity.scenarioMotion == ScenarioPathMotion::ZigZag) motion = "zigzag";
+            else if (entity.scenarioMotion == ScenarioPathMotion::AccelerationBurst) motion = "acceleration_burst";
+            *truth << runId << ',' << entity.id << ',' << time << ',' << entity.position.x << ',' << entity.position.y
+                   << ',' << entity.velocity.x << ',' << entity.velocity.y << ',' << motion << '\n';
+        }
+    }
     sink(session.finish());
+    if (truth && !*truth) throw std::runtime_error("Cannot write analytical truth");
 }
 }

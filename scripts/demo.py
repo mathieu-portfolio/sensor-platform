@@ -73,6 +73,7 @@ def run_demo(runtime, output, viewer, config=None):
         from analytics.events import read_unique
         from analytics.ingestion import ingest
         from analytics.track_events import load_frames, open_tracks
+        from analytics.analysis import export_analysis
 
         with (output / "workflow.log").open("w", encoding="utf-8") as log:
             def execute(arguments, stdout=subprocess.DEVNULL):
@@ -85,6 +86,7 @@ def run_demo(runtime, output, viewer, config=None):
             configuration.write_text(config.text(), encoding="utf-8")
             stage("record", lambda: execute(["run", "--run-id", str(RUN_ID), "--record", recording,
                                                "--procedural", configuration,
+                                               "--analysis-output", output / "analytical",
                                                "--layout-output", output / "sensors.layout", "--metrics", metrics]))
             with replay.open("wb") as stream:
                 stage("replay", lambda: execute(["replay", recording], stdout=stream))
@@ -107,6 +109,9 @@ def run_demo(runtime, output, viewer, config=None):
                                     quality_report=quality_path.relative_to(output).as_posix(),
                                     checks_passed=quality["checks_passed"],
                                     recording_sha256=receipt["recording_sha256"])
+        analytical = stage("analytical", lambda: export_analysis(output / "analytical", tracks, output / "dataset"))
+        summary["analytical"] = dict(path=f"dataset/analysis/run_id={RUN_ID}",
+                                     artifacts="analytical", rows=analytical["rows"])
 
         def analytics():
             with open_dataset(output / "dataset/clean") as connection:

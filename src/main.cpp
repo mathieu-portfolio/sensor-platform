@@ -1,5 +1,6 @@
 #include <charconv>
 #include <fstream>
+#include <filesystem>
 #include <iterator>
 #include <optional>
 #include <stdexcept>
@@ -29,7 +30,7 @@ int main(int argc, char** argv) {
         sensor_sandbox::RunId runId = 1;
         std::string recordPath;
         std::string experiment;
-        std::string proceduralPath, layoutOutput;
+        std::string proceduralPath, layoutOutput, analysisOutput;
         sensor_platform::ObservationOptions observationOptions;
         bool hasRunId = false;
         int sampleSeconds = 1;
@@ -54,6 +55,7 @@ int main(int argc, char** argv) {
             else if (option == "--experiment" && command == "run") experiment = value;
             else if (option == "--procedural" && command == "run" && proceduralPath.empty() && !value.empty()) proceduralPath = value;
             else if (option == "--layout-output" && command == "run" && layoutOutput.empty() && !value.empty()) layoutOutput = value;
+            else if (option == "--analysis-output" && command == "run" && analysisOutput.empty() && !value.empty()) analysisOutput = value;
             else if (option == "--metrics") observationOptions.metrics = value;
             else if (option == "--delay-ms" && command == "observe") observationOptions.delayMs = nonnegative();
             else if (option == "--pause-after" && command == "observe") observationOptions.pauseAfter = nonnegative();
@@ -72,11 +74,24 @@ int main(int argc, char** argv) {
             throw std::invalid_argument("--procedural cannot be combined with --sample-seconds or --experiment");
         if (!layoutOutput.empty() && proceduralPath.empty())
             throw std::invalid_argument("--layout-output requires --procedural");
+        if (!analysisOutput.empty() && proceduralPath.empty())
+            throw std::invalid_argument("--analysis-output requires --procedural");
+        std::ofstream truth;
         std::optional<sensor_platform::GeneratedScenario> generated;
         if (!proceduralPath.empty()) {
             std::ifstream input(proceduralPath);
             if (!input) throw std::runtime_error("Cannot open procedural configuration: " + proceduralPath);
             generated = sensor_platform::generateScenario(sensor_platform::readProceduralConfig(input));
+            if (!analysisOutput.empty()) {
+                const std::filesystem::path directory(analysisOutput);
+                std::filesystem::create_directories(directory);
+                std::ofstream runs(directory / "runs.csv"), sensors(directory / "sensors.csv");
+                truth.open(directory / "ground_truth.csv");
+                if (!runs || !sensors || !truth) throw std::runtime_error("Cannot create analytical artifacts");
+                sensor_platform::writeAnalysisMetadata(runs, sensors, runId, *generated);
+                runs.close(); sensors.close();
+                if (!runs || !sensors) throw std::runtime_error("Cannot close analytical metadata");
+            }
             if (!layoutOutput.empty()) {
                 std::ofstream output(layoutOutput);
                 if (!output) throw std::runtime_error("Cannot create sensor layout: " + layoutOutput);
@@ -105,7 +120,7 @@ int main(int argc, char** argv) {
                 observation.mark("produced", event.identity.streamSequence);
                 sink(event);
             };
-            if (generated) sensor_platform::runProcedural(runId, *generated, measured);
+            if (generated) sensor_platform::runProcedural(runId, *generated, measured, truth.is_open() ? &truth : nullptr);
             else if (experiment.empty()) sensor_platform::runSample(runId, measured, sampleSeconds);
             else sensor_platform::runExperiment(runId, experiment, measured);
         };
@@ -124,6 +139,10 @@ int main(int argc, char** argv) {
             produce([&](const auto& event) { live.append(event); });
         }
         live.finish();
+        if (truth.is_open()) {
+            truth.close();
+            if (!truth) throw std::runtime_error("Cannot close analytical truth");
+        }
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;

@@ -242,3 +242,62 @@ Parquet batching or more storage systems.
 
 DuckDB references: [Parquet read/write](https://duckdb.org/docs/stable/data/parquet/overview),
 [Python client](https://duckdb.org/docs/stable/clients/python/overview).
+
+## Offline analytical model
+
+`python scripts/dev.py demo` also publishes `demo/results/analytical/runs.csv`,
+`sensors.csv`, and `ground_truth.csv`, and immutable Parquet files under
+`demo/results/dataset/analysis/run_id=43/`. The existing `tracks.jsonl` is the
+input to tracking materialization and evaluation. `summary.json` lists analytical
+row counts and paths. No broker, viewer or new experiment is needed.
+
+The explicit `analytics.analysis.open_analysis(dataset_root)` reader combines
+these tables with the existing clean `events`, `scans` and `measurements` views:
+
+| Table | Grain and important columns |
+| --- | --- |
+| `runs` | One row per run: uint64 `run_id`, generator version, scenario/layout seeds, duration_seconds, target_count, sensor_count, tick_hz, all ten exposed procedural parameters (speed_min/max, maneuver, convergence, spawn_spread, coverage, layout_spread, noise, reliability, clutter). |
+| `sensors` | One row per run/sensor: seed, world x/y, heading/FOV in radians, range, refresh_rate_hz, range_noise, detection_probability, false_positive_rate_hz. |
+| `ground_truth` | One row per run/target/timestamp, including both endpoints at 8 Hz: target_id, world x/y, vx/vy, motion_type. |
+| `tracks` | Last existing fusion snapshot per run/generation/acquisition_time, one row per active track: track_id, source_sequence, x/y, vx/vy, state, last_seen, observations, sensor_count. Retired tracks are absent from subsequent snapshots; retirement events remain in tracks.jsonl. |
+| `run_metrics` | One row per run: evaluator_version, fusion_config JSON, evaluation_gate, evaluated_frames, target_samples, matched_samples, position_rmse, mean_position_error, missed_target_samples, false_track_samples, unique_false_tracks, id_switches, tentative_track_samples. |
+
+Positions use world Cartesian metres, velocities metres/second and timestamps
+simulation seconds. Speed bounds retain the generator's exposed values (scaled
+by 20/duration internally). Truth is the same absolute-time procedural motion
+used by simulation, sampled independently of radar cadence; layout changes do
+not change target truth. Version 1 of this analytical model supports one complete
+procedural generation per run, with target IDs 1..target_count.
+
+Evaluation reuses `evaluation.metrics.evaluate` with its existing greedy distance
+matching and default 5 m gate. It evaluates the final measurement frame at each
+scan timestamp, including out-of-coverage targets. Tentative tracks are excluded
+from matching; missed and false samples are time-sample counts, not distinct
+missed targets. RMSE and mean error are null when no samples match. Truth ticks
+without a scan are retained but not evaluated. Tracking states are not resampled
+or recomputed by another tracker.
+
+The production recording encoder, event contracts, clean ingestion, and
+`open_dataset(clean)` reader are unchanged and never load analytical truth.
+Truth IDs are never measurement associations. Only the explicit offline reader
+and evaluation exporter access truth. The analytical manifest binds the sidecar
+inputs and all Parquet checksums to the clean recording's normalized hash.
+Publication is atomic across all five analytical tables; repeat exports are
+idempotent and conflicting inputs require a new run ID. Old clean-only runs
+remain readable and have no fabricated metadata or truth rows.
+
+```powershell
+python scripts/dev.py analytics analysis-query demo/results/dataset
+# Optional --sql path/to/query.sql can join all analytical and clean tables.
+```
+
+For a procedural recording outside the demo, add runtime
+`--analysis-output path/to/artifacts` alongside `--procedural config` and
+`--record run.events`, then use the existing ingestion and fusion commands,
+followed by:
+
+```powershell
+python scripts/dev.py analytics analysis-export path/to/artifacts tracks.jsonl path/to/dataset
+```
+
+This is deliberately separate from the normal recording/ingestion path.
