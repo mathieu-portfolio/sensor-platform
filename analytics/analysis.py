@@ -57,7 +57,8 @@ def export_analysis(artifacts, tracks, dataset, gate=5):
         for table, schema in SCHEMAS.items():
             db.execute(f"CREATE TABLE {table} ({schema})")
             columns = dict(column.strip().split() for column in schema.split(","))
-            data = db.read_csv(str(artifacts / f"{table}.csv"), header=True, columns=columns)
+            data = db.read_csv(str(artifacts / f"{table}.csv"), header=True, columns=columns,
+                               hive_partitioning=False)
             data.insert_into(table)
             if db.execute(f"SELECT count(*) FROM {table} WHERE run_id != ? OR run_id IS NULL", [run_id]).fetchone()[0]:
                 raise ValueError("analytical run identity mismatch")

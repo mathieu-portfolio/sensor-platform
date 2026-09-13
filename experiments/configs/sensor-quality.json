@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "sensor-quality",
+  "seeds": [2026, 2027, 2028],
+  "fixed": {
+    "duration": 4,
+    "sensor_layout_seed": 73,
+    "target_count": 4,
+    "sensor_count": 3,
+    "reliability": 1,
+    "clutter": 1
+  },
+  "vary": {"noise": [0, 1, 3]}
+}

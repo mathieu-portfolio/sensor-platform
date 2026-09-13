@@ -301,3 +301,7 @@ python scripts/dev.py analytics analysis-export path/to/artifacts tracks.jsonl p
 ```
 
 This is deliberately separate from the normal recording/ingestion path.
+
+Deterministic procedural grids can be run with `python scripts/dev.py sweep`.
+See [analytical sweeps](sweeps.md) for the specification, per-run artifacts and
+experiment-level Parquet tables.

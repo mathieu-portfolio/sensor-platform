@@ -78,6 +78,9 @@ def commands(args):
         viewer = str(binaries / ("sensor_platform_viewer.exe" if os.name == "nt" else "sensor_platform_viewer"))
         return [[python, "-m", "scripts.demo", "--runtime", runtime, "--viewer", viewer,
                  *from_arguments(args).arguments(), "--output", args.output]]
+    if args.command == "sweep":
+        return [[python, "-m", "experiments.sweep", "--runtime", runtime,
+                 "--spec", args.spec, "--output", args.output]]
     if args.command == "replay":
         return [[runtime, "replay", args.path]]
     if args.command == "run":
@@ -112,6 +115,9 @@ def parser():
     viewer = sub.add_parser("viewer", add_help=False, help="open a recording in the graphical viewer (viewer --help for arguments)")
     viewer.add_argument("--help", dest="viewer_help", action="store_true")
     viewer.add_argument("extra", nargs=argparse.REMAINDER)
+    sweep = sub.add_parser("sweep", help="run a deterministic procedural parameter grid")
+    sweep.add_argument("--spec", default="experiments/configs/sensor-quality.json", help="JSON sweep specification")
+    sweep.add_argument("--output", required=True, help="new experiment output directory")
     for name, help_text in [("run", "run the local C++ sample"), ("record", "record a local run"),
                             ("demo", "run the curated recording/fusion/quality/analytics demo"),
                             ("replay", "validate/replay a recording"), ("analytics", "forward to python -m analytics"),
