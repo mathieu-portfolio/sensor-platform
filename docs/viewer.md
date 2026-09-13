@@ -139,3 +139,10 @@ For a bounded launch without a file, the wrapper requires its forwarding separat
 The focused viewer tests also compare UI-prepared recording bytes with the existing
 run/record path, verify repeatability and both seed changes, and check input limits
 and playback navigation. Workflow tests cover file and no-file command routing.
+## Aggregate study results
+
+`python scripts/dev.py results` opens the same graphical application in a separate
+persisted-results mode. It loads `data/studies/curated/analysis/results.view` and
+does not run simulation or fusion. See the [curated study](curated-study.md) for
+generation, reanalysis and chart controls. The recording/procedural playback
+commands below retain their existing behavior.

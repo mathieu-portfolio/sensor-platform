@@ -84,6 +84,15 @@ def commands(args):
     if args.command == "analysis":
         return [[python, "-m", "analytics.canonical", args.dataset,
                  *(["--output", args.output] if args.output else [])]]
+    if args.command == "study":
+        if extra[:1] == ["generate"] and not supplied(extra, "--runtime"):
+            extra += ["--runtime", runtime]
+        return [[python, "-m", "experiments.study", *extra]]
+    if args.command == "results":
+        viewer = str(binaries / ("sensor_platform_viewer.exe" if os.name == "nt" else "sensor_platform_viewer"))
+        return [[viewer, "--results", args.path, "--page", str(args.page),
+                 *(["--frames", str(args.frames)] if args.frames else []),
+                 *(["--screenshot", args.screenshot] if args.screenshot else [])]]
     if args.command == "replay":
         return [[runtime, "replay", args.path]]
     if args.command == "run":
@@ -124,6 +133,13 @@ def parser():
     analysis = sub.add_parser("analysis", help="canonical SQL summaries of an existing sweep; no simulation")
     analysis.add_argument("dataset", help="existing sweep output directory")
     analysis.add_argument("--output", help="new analysis directory; default: DATASET/canonical_analysis")
+    study = sub.add_parser("study", help="generate or analyze the curated multi-seed study")
+    study.add_argument("extra", nargs=argparse.REMAINDER)
+    results = sub.add_parser("results", help="open persisted study results in the graphical viewer; no simulation")
+    results.add_argument("path", nargs="?", default="data/studies/curated/analysis/results.view")
+    results.add_argument("--page", type=int, choices=range(6), default=0)
+    results.add_argument("--frames", type=int)
+    results.add_argument("--screenshot")
     for name, help_text in [("run", "run the local C++ sample"), ("record", "record a local run"),
                             ("demo", "run the curated recording/fusion/quality/analytics demo"),
                             ("replay", "validate/replay a recording"), ("analytics", "forward to python -m analytics"),

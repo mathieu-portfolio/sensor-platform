@@ -1,5 +1,6 @@
 #include "ViewerState.hpp"
 #include "ProceduralRun.hpp"
+#include "Results.hpp"
 #include <raylib.h>
 #include <algorithm>
 #include <charconv>
@@ -252,9 +253,11 @@ void draw(const std::optional<Playback>& playback, const std::vector<SensorGeome
 
 int main(int argc, char** argv) {
     try {
+        if (argc > 1 && std::string(argv[1]) == "--results") return resultsCommand(argc, argv);
         if (argc > 1 && std::string(argv[1]) == "--help") {
             std::cout << "Usage: sensor_platform_viewer [recording.events] [--layout sensors.layout]\n"
                          "       [--frames N] [--screenshot image.png]\n"
+                         "       --results study/analysis/results.view [--page 0..5] [--frames N] [--screenshot image.png]\n"
                          "Without a recording, use the procedural controls and Generate / Run.\n"
                          "Reuses complete recordings, replay validation and default platform fusion.\n";
             return 0;

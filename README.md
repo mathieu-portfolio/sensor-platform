@@ -37,6 +37,31 @@ The demo procedurally generates four targets and three radars, verifies replay e
 
 Kafka and raylib are optional; neither is required for the demo. To open the recording graphically, [build the viewer](docs/viewer.md) and use the command in `demo/results/viewer.md`. Or run `python scripts/dev.py viewer` and use its compact procedural controls and **Generate / Run** button. Dependencies and builds are explicit, never implicit side effects of running the demo. [Full artifact list and repeatability](docs/demo.md) · [Developer commands](docs/development.md)
 
+## Multi-seed analytics study
+
+**How do sensor quality and sensor-network configuration affect multi-target tracking performance?**
+
+The curated study uses **300 run executions**: five one-variable comparisons, three conditions each, and 20 paired target seeds per condition. Runs last 20 simulated seconds. Individual results, canonical SQL aggregates, provenance and a descriptive report are retained. Shared baselines represent 240 distinct configurations; this is not a full Cartesian parameter grid.
+
+```powershell
+python scripts/dev.py build --target sensor_platform
+python scripts/dev.py build --target sensor_platform_viewer
+python scripts/dev.py study generate --output data/studies/curated
+python scripts/dev.py results
+# Reanalyze saved sweeps without generating runs:
+python scripts/dev.py study analyze data/studies/curated --output data/studies/curated/reanalysis
+```
+
+The separate **Analytics & Results** mode in the existing raylib application loads only persisted aggregates. Its overview and five dimension tabs show means, sample-SD whiskers, valid run counts and metric definitions. `python scripts/dev.py viewer` still opens individual scenario playback. Production sensor events remain truth-free; tracking metrics use separate offline truth-based evaluation.
+
+In this experiment, noise 0 to 3 was associated with mean tracking RMSE of **0.2130 to 2.8774 m**. Reliability 0.5 to 1 produced **274.7 to 522.2 measurements/run**. Clutter 0 to 12 increased false-track samples from **0 to 35.3/run**, while matched-track RMSE changed only from **1.1502 to 1.1560 m**: RMSE alone hides that degradation. These are descriptive means from one fixed-layout study, not significance or causal claims.
+
+[Study design, results and limitations](docs/curated-study.md) · [Canonical metric definitions](docs/canonical-analyses.md)
+
+![Persisted 300-run study overview with five condition-mean charts and sample-SD whiskers](docs/assets/curated-study.png)
+
+*Verified application capture. The full study ran once in 50 minutes 5.6 seconds, including ingestion and analysis. Convergence showed non-monotonic mean ID switches (0 / 0.6 / 0.2); increasing sensor count was associated with RMSE of 1.7605 / 1.4971 / 1.1502 m. [Screenshot provenance](docs/assets/README.md)*
+
 ## Architecture
 
 ```mermaid
