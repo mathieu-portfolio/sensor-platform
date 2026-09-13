@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "canonical-sensor-network",
+  "seeds": [
+    2026,
+    2027
+  ],
+  "fixed": {
+    "duration": 4,
+    "sensor_layout_seed": 73
+  },
+  "vary": {
+    "sensor_count": [
+      1,
+      2,
+      3
+    ]
+  }
+}

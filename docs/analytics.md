@@ -305,3 +305,8 @@ This is deliberately separate from the normal recording/ingestion path.
 Deterministic procedural grids can be run with `python scripts/dev.py sweep`.
 See [analytical sweeps](sweeps.md) for the specification, per-run artifacts and
 experiment-level Parquet tables.
+
+For descriptive seed aggregates from an existing sweep, use
+`python scripts/dev.py analysis <sweep-output>`. See the
+[canonical sensor analyses](canonical-analyses.md) for SQL, metric definitions,
+small specifications, spread statistics and interpretation limits.

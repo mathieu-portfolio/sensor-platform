@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "name": "canonical-reliability",
+  "seeds": [
+    2026,
+    2027
+  ],
+  "fixed": {
+    "duration": 4,
+    "sensor_layout_seed": 73
+  },
+  "vary": {
+    "reliability": [
+      0.5,
+      0.75,
+      1
+    ]
+  }
+}

@@ -81,6 +81,9 @@ def commands(args):
     if args.command == "sweep":
         return [[python, "-m", "experiments.sweep", "--runtime", runtime,
                  "--spec", args.spec, "--output", args.output]]
+    if args.command == "analysis":
+        return [[python, "-m", "analytics.canonical", args.dataset,
+                 *(["--output", args.output] if args.output else [])]]
     if args.command == "replay":
         return [[runtime, "replay", args.path]]
     if args.command == "run":
@@ -118,6 +121,9 @@ def parser():
     sweep = sub.add_parser("sweep", help="run a deterministic procedural parameter grid")
     sweep.add_argument("--spec", default="experiments/configs/sensor-quality.json", help="JSON sweep specification")
     sweep.add_argument("--output", required=True, help="new experiment output directory")
+    analysis = sub.add_parser("analysis", help="canonical SQL summaries of an existing sweep; no simulation")
+    analysis.add_argument("dataset", help="existing sweep output directory")
+    analysis.add_argument("--output", help="new analysis directory; default: DATASET/canonical_analysis")
     for name, help_text in [("run", "run the local C++ sample"), ("record", "record a local run"),
                             ("demo", "run the curated recording/fusion/quality/analytics demo"),
                             ("replay", "validate/replay a recording"), ("analytics", "forward to python -m analytics"),

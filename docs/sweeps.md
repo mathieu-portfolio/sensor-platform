@@ -113,3 +113,7 @@ GROUP BY e.noise ORDER BY e.noise;
 
 Focused checks (after building) use the selected `.venv`/runtime via the developer
 router: `python scripts/dev.py test experiments -k parameter_sweep`.
+
+Use `python scripts/dev.py analysis <sweep-output>` to produce the
+[canonical sensor analyses](canonical-analyses.md) from these stored tables,
+without rerunning the sweep.
